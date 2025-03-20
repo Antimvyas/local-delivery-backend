@@ -6,21 +6,26 @@ import API_BASE from "../config1";
 const SetFood = ({route}) => {
   const [foods, setFoods] = useState([]);
   const vendorId = route.params?.vendor_id;  // Replace with actual vendor ID
+   
 
+
+ 
   useEffect(() => {
     console.log("new",vendorId);
     
-    // fetchFoods();
+    fetchFoods();
   }, []);
 
-//   const fetchFoods = async () => {
-//     try {
-//       const res = await axios.get(`${API_BASE}/offline/${vendorId}`);
-    //   setFoods(res.data);
-//     } catch (error) {
-//       console.error("Error fetching foods:", error);
-//     }
-//   };
+  const fetchFoods = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/offline/${vendorId}`);
+      console.log("my data",res.data);
+      
+        setFoods(res.data)
+    } catch (error) {
+      console.error("Error fetching foods:", error);
+    }
+  };
 
 //   const toggleFoodAvailability = async (foodId, currentStatus) => {
 //     try {
@@ -39,10 +44,10 @@ const SetFood = ({route}) => {
       <Text style={styles.title}>Manage Food Availability</Text>
       <FlatList
         data={foods}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.foodItem}>
-            <Text style={styles.foodName}>{item.name} - ${item.price}</Text>
+            <Text style={styles.foodName}>{item.food_name} - ${item.cost}</Text>
             <Switch
               value={item.is_available}
               onValueChange={() => toggleFoodAvailability(item.id, item.is_available)}

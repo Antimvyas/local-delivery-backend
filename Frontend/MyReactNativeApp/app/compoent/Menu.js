@@ -57,7 +57,7 @@ const Menu = ({vendor_id}) => {
             </TouchableOpacity>
 
             {/* TouchableOpacity for navigating to "RequestUdarScreen" */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
                 style={styles.button}
                 onPress={() => navigation.navigate("View_menu",{vendor_id:vendorId})}
             >
@@ -65,7 +65,7 @@ const Menu = ({vendor_id}) => {
                     source={require("../android/app/src/main/assets/view.png")}
                     style={styles.ratingImage}
                 />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
         </View>
     );
 };
@@ -77,19 +77,21 @@ const styles = StyleSheet.create({
     display: "flex",
     flexDirection: "column",
     position: "absolute",
-    bottom:70,
-    right:5,
+    // top:180,
+    bottom:20,
+    left:10,
+    // right:5,
     // borderWidth:3,
-    height:"170%",
-    width: "110%",
+    height:"10%",
+    width: "20%",
     // backgroundColor: "#fff",
-    // alignItems: "center",
-    // justifyContent: "space-between",
-    paddingVertical: 10,
-    paddingLeft: 5,
-    paddingRight:10,
-    boxShadow: "4px 4px 4px 6px rgba(0, 0, 0, 0.1)",  // Adding a subtle shadow
-    borderRadius: 20, // Rounded corners for 3D feel
+    alignItems: "center",
+    justifyContent: "center",
+    // paddingVertical: 10,
+    // paddingLeft: 5,
+    // paddingRight:10,
+    // boxShadow: "4px 4px 4px 6px rgba(0, 0, 0, 0.1)",  // Adding a subtle shadow
+    borderRadius: 50, // Rounded corners for 3D feel
   },
   ratingImage: {
     width: 40, // Slightly bigger size for a more noticeable 3D effect
@@ -99,7 +101,7 @@ const styles = StyleSheet.create({
     transition: "transform 0.2s, box-shadow 0.2s",  // Smooth transition for hover effects
     transform: "scale(1)",  // Default scale
   },
-  // Add hover effect or active effect for buttons
+  // // Add hover effect or active effect for buttons
   ratingImageHovered: {
     transform: "scale(1.1)",  // Scale up slightly for hover effect
     boxShadow: "0 8px 12px rgba(0, 0, 0, 0.2)",  // Add more shadow on hover

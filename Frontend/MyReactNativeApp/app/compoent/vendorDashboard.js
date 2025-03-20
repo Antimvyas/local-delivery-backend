@@ -5,9 +5,12 @@ import API_BASE from "../config1.js"
 import VendorNavigation from './VendorNavigation.js';
 export default function VendorDashboard({ route }) {
   const navigation = useNavigation();
-  const vendor_id = route.params?.vendor_id;
+  const vendor_id = route.params?.vendor_id?.vendor_id ?? route.params?.vendor_id;
+
 
   useEffect(() => {
+    console.log("v1",vendor_id);
+    
     if (!vendor_id) {
       Alert.alert('Error', 'Vendor ID not found!', [
         { text: 'Go Back', onPress: () => navigation.goBack() },

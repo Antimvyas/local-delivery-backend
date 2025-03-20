@@ -9,7 +9,7 @@ import VendorSetting from './VendorSetting';
 const VendorNavigation = (vendor_id) => {
     const navigation = useNavigation();
     // const [customerId, setCustomerId] = useState(customer_id);
-    const [vendorId, setVendorId] = useState(vendor_id);
+    const [vendorId, setVendorId] = useState(vendor_id?.vendor_id ?? vendor_id);
     const [loading, setLoading] = useState(false);
     const[component, setcomponent]=useState(false)
     const[component1, setcomponent1]=useState(false)
@@ -62,15 +62,15 @@ const VendorNavigation = (vendor_id) => {
         {/*  */}
         <TouchableOpacity
           style={styles.iconContainer}
-          onPress={() => setcomponent(!component)} 
+          onPress={() => navigation.navigate("View_menu",{vendor_id:vendorId})} 
           
         >
-           <Image source={require("../android/app/src/main/assets/menu.png")}
+           <Image source={require("../android/app/src/main/assets/view.png")}
                               style={styles.img}
                           />
               
         </TouchableOpacity>
-        {component && <Menu vendor_id={vendorId}/>}
+        
         </View>
         <View style={styles.newcomponet}>
         {/*  */}

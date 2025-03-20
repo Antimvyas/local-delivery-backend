@@ -9,7 +9,7 @@ import API_BASE from "../config1.js";
 const VendorSetting = (vendor_id) => {
  const navigation = useNavigation();
       //   const [customerId, setCustomerId] = useState(customer_id);
-        const [vendorId, setVendorId] = useState(vendor_id);
+      const [vendorId, setVendorId] = useState(vendor_id?.vendor_id ?? vendor_id);
         const [loading, setLoading] = useState(true);
         // Safe access to route.params
         

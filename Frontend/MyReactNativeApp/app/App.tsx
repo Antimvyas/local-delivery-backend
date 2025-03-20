@@ -28,7 +28,7 @@ import Credit from './compoent/Credit.js';
 import New from './compoent/New.js';
 import Account from './compoent/Account.js';
 import SettingsScreen from './compoent/SettingsScreen.js';
-import SetFood from './compoent/Setfood.js';
+import SetFood from './compoent/SetFood.js';
 // import Navigation from './compoent/Navigation.js';
 
 

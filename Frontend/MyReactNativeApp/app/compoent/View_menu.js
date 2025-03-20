@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import BASE_URL from "../config.js";
 import API_BASE from "../config1.js"
+import Menu from './Menu.js';
 // const API_BASE = 'http://192.168.1.19:3000/api/v1';
 
 const ViewMenu = ({ route }) => {
@@ -76,23 +77,31 @@ const ViewMenu = ({ route }) => {
                 <Text style={styles.foodCost}>₹{item.cost}</Text>
                 <Text style={styles.foodName}>{item.food_type}</Text>
                 <Text style={styles.foodName}>{item.food_description}</Text>
+
+                <View style={styles.icon}>
                 <TouchableOpacity 
                   onPress={() => navigation.navigate('EditFood', { foodItem: item })}
                   style={[styles.button, styles.editButton]}
                 >
-                  <Text style={styles.buttonText}>✏️ Edit</Text>
+                   <Image  source={require("../android/app/src/main/assets/edit.png")}
+                                       style={styles.ratingImage}
+                                   />
                 </TouchableOpacity>
                 <TouchableOpacity 
                   onPress={() => navigation.navigate('DeleteFood', { foodItem: item })}
                   style={[styles.button, styles.deleteButton]}
                 >
-                  <Text style={styles.buttonText}>🗑 Delete</Text>
+                   <Image source={require("../android/app/src/main/assets/delete.png")}
+                                       style={styles.ratingImage}
+                                   />
                 </TouchableOpacity>
+                </View>
               </View>
             );
           }}
         />
       )}
+      <Menu vendor_id={vendor_id}/>
     </View>
   );
 };
@@ -137,25 +146,33 @@ const styles = StyleSheet.create({
     color: 'green',
     marginTop: 5,
   },
-  button: {
-    marginTop: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '80%',
+  
+  // editButton: {
+  //   backgroundColor: '#007bff',
+  // },
+  // deleteButton: {
+  //   backgroundColor: '#dc3545',
+  // },
+  icon:{
+    flex:1,
+    flexDirection:"row",
+    borderWidth:3,
+    width:"35%",
+    // height:"10%",
+    top:-200,
   },
-  editButton: {
-    backgroundColor: '#007bff',
+  ratingImage: {
+    width: 40, // Slightly bigger size for a more noticeable 3D effect
+    height: 40,
+    borderRadius: 10, // Round the edges of the image
+    margin: 10,  // Give space between each icon for better alignment
+    transition: "transform 0.2s, box-shadow 0.2s",  // Smooth transition for hover effects
+    transform: "scale(1)",  // Default scale
   },
-  deleteButton: {
-    backgroundColor: '#dc3545',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  // Add hover effect or active effect for buttons
+  ratingImageHovered: {
+    transform: "scale(1.1)",  // Scale up slightly for hover effect
+    boxShadow: "0 8px 12px rgba(0, 0, 0, 0.2)",  // Add more shadow on hover
+  }
 });
 

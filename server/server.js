@@ -1310,13 +1310,15 @@ app.put("/api/v1/customer/:id", (req, res) => {
 //  food
 
 // Fetch all food items for a vendor
-// app.get("/api/v1/offline/:vendorId", (req, res) => {
-//   const { vendorId } = req.params;
-//   db.query("SELECT * FROM food WHERE vendor_id = ?", [vendorId], (err, results) => {
-//     if (err) throw err;
-//     res.json(results);
-//   });
-// });
+app.get("/api/v1/offline/:vendorId", (req, res) => {
+  const { vendorId } = req.params;
+  console.log("v",vendorId);
+  
+  db.query("SELECT * FROM food WHERE vendor_id = ?", [vendorId], (err, results) => {
+    if (err) throw err;
+    res.json(results);
+  });
+});
 
 
 
