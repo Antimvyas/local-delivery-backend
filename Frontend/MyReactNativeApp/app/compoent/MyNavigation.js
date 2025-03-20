@@ -38,7 +38,7 @@ const MyNavigation = ({customer_id,vendor_id}) => {
         style={styles.iconContainer}
         onPress={() => navigation.navigate("CustomerDashboard", { customer_id: customerId, vendor_id: vendorId })}
       >
-         <Image source={require("../android/app/src/main/assets/home.png")}
+         <Image source={require("../android/app/src/main/assets/home1.png")}
                             style={styles.img}
                         />
       </TouchableOpacity>
@@ -47,7 +47,7 @@ const MyNavigation = ({customer_id,vendor_id}) => {
         style={styles.iconContainer}
         onPress={() => navigation.navigate("MyOrdersScreen", { customer_id: customerId, vendor_id: vendorId })}
       >
-        <Image source={require("../android/app/src/main/assets/order.png")}
+        <Image source={require("../android/app/src/main/assets/orderss.png")}
                             style={styles.img}
                         />
       </TouchableOpacity>
@@ -58,7 +58,7 @@ const MyNavigation = ({customer_id,vendor_id}) => {
         onPress={() => setcomponent(!component)} 
         
       >
-         <Image source={require("../android/app/src/main/assets/credit.png")}
+         <Image source={require("../android/app/src/main/assets/credit1.png")}
                             style={styles.img}
                         />
             

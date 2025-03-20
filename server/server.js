@@ -142,7 +142,8 @@ const upload = multer({ storage });
 // API GET FOOD ITEM
 app.get('/api/v1/food', (req, res) => {
   const vendor_id = req.query.vendor_id; // ✅ FIXED: Extract vendor_id safely
-
+    console.log("id",vendor_id);
+    
   if (!vendor_id) {
     return res.status(400).json({ error: 'Missing vendor_id parameter' });
   }
@@ -1305,6 +1306,18 @@ app.put("/api/v1/customer/:id", (req, res) => {
     res.json({ message: "Customer updated successfully" });
   });
 });
+
+//  food
+
+// Fetch all food items for a vendor
+// app.get("/api/v1/offline/:vendorId", (req, res) => {
+//   const { vendorId } = req.params;
+//   db.query("SELECT * FROM food WHERE vendor_id = ?", [vendorId], (err, results) => {
+//     if (err) throw err;
+//     res.json(results);
+//   });
+// });
+
 
 
 

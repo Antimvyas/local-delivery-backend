@@ -1,5 +1,3 @@
-
-
 import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity ,ScrollView,Image, ToastAndroid, Alert} from "react-native";
@@ -7,9 +5,10 @@ import axios from "axios";
 import MyNavigation from "./MyNavigation.js";
 import API_BASE from "../config1.js";
 
-const Credit = ({customer_id,vendor_id}) => {
+
+const Menu = ({vendor_id}) => {
     const navigation = useNavigation();
-      const [customerId, setCustomerId] = useState(customer_id);
+    //   const [customerId, setCustomerId] = useState(customer_id);
       const [vendorId, setVendorId] = useState(vendor_id);
       const [loading, setLoading] = useState(true);
       // Safe access to route.params
@@ -17,12 +16,12 @@ const Credit = ({customer_id,vendor_id}) => {
       
      
     useEffect(() => {
-      console.log("hello",customerId);
-      if(!customerId){
+      console.log("hello",vendorId);
+      if(!vendorId){
         Alert.alert("missing")
-        // ToastAndroid.show("missing")
+    //     // ToastAndroid.show("missing")
       }else{
-        setLoading(false);
+    setLoading(false);
       }
       // const fetchIds = async () => {
       //   try {
@@ -49,10 +48,10 @@ const Credit = ({customer_id,vendor_id}) => {
             {/* TouchableOpacity for navigating to "MyUdarScreen" */}
             <TouchableOpacity
                 style={styles.button}
-                onPress={() => navigation.navigate("New", { customer_id:customerId,vendor_id:vendorId})}
+                onPress={() => navigation.navigate("Add_menu", {vendor_id:vendorId})}
             >
                 <Image
-                    source={require("../android/app/src/main/assets/MyUdar.png")}
+                    source={require("../android/app/src/main/assets/food.png")}
                     style={styles.ratingImage}
                 />
             </TouchableOpacity>
@@ -60,10 +59,10 @@ const Credit = ({customer_id,vendor_id}) => {
             {/* TouchableOpacity for navigating to "RequestUdarScreen" */}
             <TouchableOpacity
                 style={styles.button}
-                onPress={() => navigation.navigate("RequestUdarScreen", { customer_id:customerId})}
+                onPress={() => navigation.navigate("View_menu",{vendor_id:vendorId})}
             >
                 <Image
-                    source={require("../android/app/src/main/assets/Udar.png")}
+                    source={require("../android/app/src/main/assets/view.png")}
                     style={styles.ratingImage}
                 />
             </TouchableOpacity>
@@ -71,17 +70,15 @@ const Credit = ({customer_id,vendor_id}) => {
     );
 };
 
-export default Credit;
+export default Menu;
 
 const styles = StyleSheet.create({
   container: {
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
     position: "absolute",
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    bottom:65,
-    right:-10,
+    bottom:70,
+    right:5,
     // borderWidth:3,
     height:"170%",
     width: "110%",
@@ -91,7 +88,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingLeft: 5,
     paddingRight:10,
-    // boxShadow: "4px 4px 4px 6px rgba(0, 0, 0, 0.1)",  // Adding a subtle shadow
+    boxShadow: "4px 4px 4px 6px rgba(0, 0, 0, 0.1)",  // Adding a subtle shadow
     borderRadius: 20, // Rounded corners for 3D feel
   },
   ratingImage: {
@@ -103,5 +100,8 @@ const styles = StyleSheet.create({
     transform: "scale(1)",  // Default scale
   },
   // Add hover effect or active effect for buttons
-  
+  ratingImageHovered: {
+    transform: "scale(1.1)",  // Scale up slightly for hover effect
+    boxShadow: "0 8px 12px rgba(0, 0, 0, 0.2)",  // Add more shadow on hover
+  }
 });

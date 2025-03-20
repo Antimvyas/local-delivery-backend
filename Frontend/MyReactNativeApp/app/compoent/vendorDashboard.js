@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import API_BASE from "../config1.js"
+import VendorNavigation from './VendorNavigation.js';
 export default function VendorDashboard({ route }) {
   const navigation = useNavigation();
   const vendor_id = route.params?.vendor_id;
@@ -41,6 +42,7 @@ export default function VendorDashboard({ route }) {
       <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("AccountScreen", { vendor_id })}>
         <Text style={styles.buttonText}>View Udar Customers</Text>
       </TouchableOpacity>
+      <VendorNavigation vendor_id={vendor_id}/>
       
     </View>
   );
