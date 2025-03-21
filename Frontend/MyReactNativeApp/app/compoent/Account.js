@@ -12,7 +12,7 @@ const Account = ({route}) => {
     Phone: "",
     username: "",
   });
-//   const customerId = 1; // Replace with dynamic customer ID if needed
+
 
   useEffect(() => {
     console.log(customer_id);
