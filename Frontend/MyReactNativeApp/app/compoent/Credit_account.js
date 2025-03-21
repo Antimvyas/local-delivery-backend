@@ -56,7 +56,7 @@ const Credit_account = (vendor_id) => {
              </TouchableOpacity>
  
              {/* TouchableOpacity for navigating to "RequestUdarScreen" */}
-             <TouchableOpacity
+             {/* <TouchableOpacity
                  style={styles.button}
                  onPress={() => navigation.navigate("AccountScreen",{vendor_id:vendorId})}
              >
@@ -64,7 +64,7 @@ const Credit_account = (vendor_id) => {
                      source={require("../android/app/src/main/assets/credit1.png")}
                      style={styles.ratingImage}
                  />
-             </TouchableOpacity>
+             </TouchableOpacity> */}
          </View>
      );
  };
@@ -78,17 +78,17 @@ const Credit_account = (vendor_id) => {
      position: "absolute",
      bottom:70,
      right:5,
-     // borderWidth:3,
-     height:"170%",
-     width: "110%",
+    //  borderWidth:3,
+     height:"10%",
+     width: "20%",
     //  backgroundColor: "#fff",
-     // alignItems: "center",
-     // justifyContent: "space-between",
-     paddingVertical: 10,
-     paddingLeft: 5,
-     paddingRight:10,
+     alignItems: "center",
+     justifyContent: "center",
+    //  paddingVertical: 10,
+    //  paddingLeft: 5,
+    //  paddingRight:10,
      boxShadow: "4px 4px 4px 6px rgba(0, 0, 0, 0.1)",  // Adding a subtle shadow
-     borderRadius: 20, // Rounded corners for 3D feel
+     borderRadius: 50, // Rounded corners for 3D feel
    },
    ratingImage: {
      width: 40, // Slightly bigger size for a more noticeable 3D effect

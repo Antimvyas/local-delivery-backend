@@ -27,17 +27,17 @@ const SetFood = ({route}) => {
     }
   };
 
-//   const toggleFoodAvailability = async (foodId, currentStatus) => {
-//     try {
-//       await axios.post(`${API_BASE}/toggle-food`, {
-//         foodId,
-//         isAvailable: !currentStatus,
-//       });
-//       fetchFoods(); // Refresh food list
-//     } catch (error) {
-//       console.error("Error updating food status:", error);
-//     }
-//   };
+  const toggleFoodAvailability = async (foodId, currentStatus) => {
+    try {
+      await axios.post(`${API_BASE}/toggle-food`, {
+        foodId,
+        isAvailable: !currentStatus,
+      });
+      fetchFoods(); // Refresh food list
+    } catch (error) {
+      console.error("Error updating food status:", error);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -48,10 +48,7 @@ const SetFood = ({route}) => {
         renderItem={({ item }) => (
           <View style={styles.foodItem}>
             <Text style={styles.foodName}>{item.food_name} - ${item.cost}</Text>
-            <Switch
-              value={item.is_available}
-              onValueChange={() => toggleFoodAvailability(item.id, item.is_available)}
-            />
+           
           </View>
         )}
       />

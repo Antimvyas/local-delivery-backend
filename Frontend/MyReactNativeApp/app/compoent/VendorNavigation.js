@@ -76,7 +76,7 @@ const VendorNavigation = (vendor_id) => {
         {/*  */}
         <TouchableOpacity
           style={styles.iconContainer}
-          onPress={() => setcomponent1(!component1)} 
+          onPress={() => navigation.navigate("AccountScreen",{vendor_id:vendorId})} 
           
         >
            <Image source={require("../android/app/src/main/assets/credit1.png")}
@@ -84,7 +84,7 @@ const VendorNavigation = (vendor_id) => {
                           />
               
         </TouchableOpacity>
-        {component1 && <Credit_account vendor_id={vendorId}  />}
+       
         </View>
         <View style={styles.newcomponet}>
         {/*  */}

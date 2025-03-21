@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, Image, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, Image, StyleSheet, ActivityIndicator, Alert, TouchableOpacity,Switch } from 'react-native';
 import axios from 'axios';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import BASE_URL from "../config.js";
@@ -10,6 +10,7 @@ import Menu from './Menu.js';
 const ViewMenu = ({ route }) => {
   const vendor_id = route.params?.vendor_id;
   const [foodItems, setFoodItems] = useState([]);
+  const [foodId,setfoodId]=useState();
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
 
@@ -31,6 +32,9 @@ const ViewMenu = ({ route }) => {
         setFoodItems([]);
       } else {
         setFoodItems(response.data);
+        
+        // console.log("foodid",response.data.food_id);
+        
         console.log(response.data);
         
       }
@@ -46,8 +50,41 @@ const ViewMenu = ({ route }) => {
   useFocusEffect(
     useCallback(() => {
       fetchFoodItems();
+      toggleFoodAvailability();
     }, [vendor_id])
   );
+   
+
+  const toggleFoodAvailability = async (foodId, currentStatus) => {
+    if (!foodId) {
+      console.error("Error: foodId is undefined!");
+      return;
+    }
+  
+    try {
+      // console.log("Toggling food availability for ID:", foodId);
+  
+      const response = await axios.post(`${API_BASE}/toggle-food`, {
+        foodId, // Ensure this is sent correctly
+        isAvailable: !currentStatus,
+      });
+  
+      console.log("Response from server:", response.data);
+  
+      // Update state immediately
+      setFoodItems((prevItems) =>
+        prevItems.map((item) =>
+          item.food_id === foodId ? { ...item, is_available: !currentStatus } : item
+        )
+      );
+    } catch (error) {
+      console.error("Error updating food status:", error.response ? error.response.data : error);
+      Alert.alert("Error", "Failed to update food status.");
+    }
+  };
+  
+  
+  
 
   if (loading) {
     return <ActivityIndicator size="large" color="blue" style={{ marginTop: 50 }} />;
@@ -63,11 +100,11 @@ const ViewMenu = ({ route }) => {
           keyExtractor={(item) => item.food_id.toString()}
           renderItem={({ item }) => {
             const imageUrl = item.food_img.startsWith('http')
-              ? item.food_img // Use full URL if already provided
-              : BASE_URL + item.food_img; // Otherwise, append BASE_URL
-
+              ? item.food_img
+              : BASE_URL + item.food_img;
+          
             return (
-              <View style={styles.card}>
+              <View style={[styles.card, !item.is_available && styles.cardBlur]}>
                 <Image
                   source={{ uri: imageUrl }}
                   style={styles.foodImage}
@@ -77,28 +114,34 @@ const ViewMenu = ({ route }) => {
                 <Text style={styles.foodCost}>₹{item.cost}</Text>
                 <Text style={styles.foodName}>{item.food_type}</Text>
                 <Text style={styles.foodName}>{item.food_description}</Text>
+          
+                {/* Toggle Button */}
+                <View style={styles.toggle}> 
+                <Switch  value={item.is_available}  onValueChange={() => {console.log("Switch Toggled for Food ID:", item.food_id);
+                           toggleFoodAvailability(item.food_id, item.is_available); }}
+                       trackColor={{ false: "#ccc", true: "green" }} /> 
 
-                <View style={styles.icon}>
-                <TouchableOpacity 
-                  onPress={() => navigation.navigate('EditFood', { foodItem: item })}
-                  style={[styles.button, styles.editButton]}
-                >
-                   <Image  source={require("../android/app/src/main/assets/edit.png")}
-                                       style={styles.ratingImage}
-                                   />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => navigation.navigate('DeleteFood', { foodItem: item })}
-                  style={[styles.button, styles.deleteButton]}
-                >
-                   <Image source={require("../android/app/src/main/assets/delete.png")}
-                                       style={styles.ratingImage}
-                                   />
-                </TouchableOpacity>
+                </View>
+          
+                {/* Edit & Delete Buttons (Fixed Position) */}
+                <View style={styles.iconContainer}>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('EditFood', { foodItem: item })}
+                    style={[styles.button, styles.editButton]}
+                  >
+                    <Image source={require("../android/app/src/main/assets/edit.png")} style={styles.iconImage} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('DeleteFood', { foodItem: item })}
+                    style={[styles.button, styles.deleteButton]}
+                  >
+                    <Image source={require("../android/app/src/main/assets/delete.png")} style={styles.iconImage} />
+                  </TouchableOpacity>
                 </View>
               </View>
             );
           }}
+          
         />
       )}
       <Menu vendor_id={vendor_id}/>
@@ -109,70 +152,61 @@ const ViewMenu = ({ route }) => {
 export default ViewMenu;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 10,
-  },
-  noItemsText: {
-    textAlign: 'center',
-    fontSize: 18,
-    marginTop: 20,
-    color: 'gray',
-  },
   card: {
-    backgroundColor: 'white',
-    padding: 15,
-    marginVertical: 8,
+    width: "90%",
+    maxHeight: 350,
+    alignSelf: "center",
     borderRadius: 10,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
+    padding: 20,
+    marginVertical: 15,
+    alignItems: "center",
+    backgroundColor: "#fff",
+    elevation: 5, // Shadow effect
   },
+
+  // Style for Blur Effect
+  cardBlur: {
+    opacity: 0.5, // Reduce visibility when unavailable
+  },
+
   foodImage: {
     width: 120,
     height: 120,
     borderRadius: 10,
   },
+
   foodName: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 10,
   },
+
   foodCost: {
     fontSize: 16,
-    color: 'green',
+    color: "green",
     marginTop: 5,
   },
-  
-  // editButton: {
-  //   backgroundColor: '#007bff',
-  // },
-  // deleteButton: {
-  //   backgroundColor: '#dc3545',
-  // },
-  icon:{
-    flex:1,
-    flexDirection:"row",
-    borderWidth:3,
-    width:"35%",
-    // height:"10%",
-    top:-200,
+toggle:{
+  // borderWidth:3,
+  flexDirection:"row",
+  top:10,
+  left:10,
+  position:"absolute"
+},
+  // Fixed Positioning for Edit & Delete Icons
+  iconContainer: {
+    flexDirection: "row",
+    position: "absolute",
+    top: 10, // Keep at the top
+    right: 5
+    , // Align to the right
   },
-  ratingImage: {
-    width: 40, // Slightly bigger size for a more noticeable 3D effect
+
+  iconImage: {
+    width: 40,
     height: 40,
-    borderRadius: 10, // Round the edges of the image
-    margin: 10,  // Give space between each icon for better alignment
-    transition: "transform 0.2s, box-shadow 0.2s",  // Smooth transition for hover effects
-    transform: "scale(1)",  // Default scale
+    marginHorizontal: 5, // Space between icons
   },
-  // Add hover effect or active effect for buttons
-  ratingImageHovered: {
-    transform: "scale(1.1)",  // Scale up slightly for hover effect
-    boxShadow: "0 8px 12px rgba(0, 0, 0, 0.2)",  // Add more shadow on hover
-  }
 });
+
 

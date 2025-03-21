@@ -147,7 +147,7 @@ app.get('/api/v1/food', (req, res) => {
   if (!vendor_id) {
     return res.status(400).json({ error: 'Missing vendor_id parameter' });
   }
-   const sql = `SELECT food_id,food_name,cost,food_img ,food_type,food_description from food where vendor_id=?`;
+   const sql = `SELECT food_id,food_name,cost,food_img ,food_type,food_description,is_available from food where vendor_id=?`;
   db.query(sql, [vendor_id], (err, results) => {
     if (err) {
       console.error('Error fetching data:', err);
@@ -970,7 +970,8 @@ app.get("/api/v1/udar-requests/:vendor_id", (req, res) => {
 // ✅ Fetch Udar Accounts for a Vendor
 app.get("/api/v1/vendor-dashboard/:vendor_id", (req, res) => {
   const { vendor_id } = req.params;
-
+  console.log(vendor_id);
+  
   const query = `
       SELECT 
           c.customer_id,
@@ -1310,16 +1311,25 @@ app.put("/api/v1/customer/:id", (req, res) => {
 //  food
 
 // Fetch all food items for a vendor
-app.get("/api/v1/offline/:vendorId", (req, res) => {
-  const { vendorId } = req.params;
-  console.log("v",vendorId);
-  
-  db.query("SELECT * FROM food WHERE vendor_id = ?", [vendorId], (err, results) => {
-    if (err) throw err;
-    res.json(results);
+app.post("/api/v1/toggle-food", (req, res) => {
+  const { foodId, isAvailable } = req.body;
+ console.log(foodId,isAvailable);
+ 
+  const query = "UPDATE food SET is_available = ? WHERE food_id = ?";
+  db.query(query, [isAvailable, foodId], (err, result) => {
+    if (err) {
+      console.error("Error updating food status:", err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Food item not found" });
+    }
+     console.log("h",result);
+     
+    res.json({ message: "Food availability updated successfully" });
   });
 });
-
 
 
 

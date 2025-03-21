@@ -168,11 +168,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     
     boxShadow: "5px 5px 7px rgba(93, 93, 93, 0.4)",
-    // shadowColor: "#000",
-    // shadowOffset: { width: 5, height: 5 },
-    // shadowOpacity: 2,
-    // shadowRadius: 8,
-    // elevation: 10,
+    
   },
 
   ratingImage: {

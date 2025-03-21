@@ -35,6 +35,8 @@ const Orders = ({ route }) => {
         params: { vendor_id }
       });
       setOrders(response.data);
+      console.log(response.data);
+      
       setLoading(false);
     } catch (error) {
       console.error("Error fetching orders:", error.response?.data || error.message);
