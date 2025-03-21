@@ -18,6 +18,8 @@ export default function MyUdarScreen({ route }) {
 
   const fetchUdarRecords = async () => {
     try {
+      console.log("or", customer_id);
+      
       const response = await axios.get(`${API_BASE}/customer/udar/${customer_id}`);
       setShopName(response.data.Shop_name);
       
@@ -156,10 +158,8 @@ export default function MyUdarScreen({ route }) {
           </TouchableOpacity>
         </View>
       </View>
-
-      <TouchableOpacity>
-        <MyNavigation />
-      </TouchableOpacity>
+      {/* console.log("Passing customer_id to MyNavigation:", customer_id); */}
+      <MyNavigation customer_id={customer_id} />
     </View>
   );
 }
@@ -205,13 +205,14 @@ const styles = StyleSheet.create({
     width: "90%",
     height: 130,
     borderTopWidth:2,
-
+    // borderWidth:3,
     borderTopColor:"#CACACA",
     alignSelf: "center",
     borderRadius: 10,
     padding: 20,
-    marginRight:20,
-    marginVertical: 15,
+    // marginRight:20,
+    // marginVertical: 15,
+    // bottom:-10,
     alignItems: "center",
     
     boxShadow: "5px 5px 7px rgba(93, 93, 93, 0.4)",
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
     
   },
   input:{
-    // borderWidth:2,
+    borderWidth:4,
     width:"50%",
     borderColor:"#CACACA",
     backgroundColor:"#CACACA",
@@ -280,6 +281,6 @@ buttonText:{
 },
 bottomSection:{
   // borderWidth:3,
-  top:-40
+  top:-20
 }
 });

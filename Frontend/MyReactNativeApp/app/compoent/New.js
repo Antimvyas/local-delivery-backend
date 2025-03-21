@@ -5,6 +5,7 @@ import API_BASE from "../config1.js";
 import MyNavigation from "./MyNavigation.js";
 import  Text from"../GlobalText.js"
 import "../i18n.js"; // Import translations
+import Credit from "./Credit.js";
 // import { useTranslation } from "react-i18next";
 
 export default function New({ route, navigation }) {
@@ -57,6 +58,7 @@ export default function New({ route, navigation }) {
           )}
         />
       )}
+      <Credit customer_id={customer_id}/>
       <MyNavigation/>
     </View>
   );

@@ -47,7 +47,7 @@ const Credit = ({customer_id,vendor_id}) => {
       
         <View style={styles.container}>
             {/* TouchableOpacity for navigating to "MyUdarScreen" */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
                 style={styles.button}
                 onPress={() => navigation.navigate("New", { customer_id:customerId,vendor_id:vendorId})}
             >
@@ -55,7 +55,7 @@ const Credit = ({customer_id,vendor_id}) => {
                     source={require("../android/app/src/main/assets/MyUdar.png")}
                     style={styles.ratingImage}
                 />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {/* TouchableOpacity for navigating to "RequestUdarScreen" */}
             <TouchableOpacity
@@ -77,22 +77,22 @@ const styles = StyleSheet.create({
   container: {
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    // backgroundColor: "rgba(255, 255, 255, 0.3)",
     position: "absolute",
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    bottom:65,
-    right:-10,
+    // backgroundColor: "rgba(255, 255, 255, 0.3)",
+    // bottom:100,
+    // right:-10,
     // borderWidth:3,
-    height:"170%",
-    width: "110%",
+    height:"10%",
+    width: "20%",
     // backgroundColor: "#fff",
-    // alignItems: "center",
-    // justifyContent: "space-between",
-    paddingVertical: 10,
-    paddingLeft: 5,
-    paddingRight:10,
+    alignItems: "center",
+    justifyContent: "center",
+    // paddingVertical: 10,
+    // paddingLeft: 5,
+    // paddingRight:10,
     // boxShadow: "4px 4px 4px 6px rgba(0, 0, 0, 0.1)",  // Adding a subtle shadow
-    borderRadius: 20, // Rounded corners for 3D feel
+    borderRadius: 50, // Rounded corners for 3D feel
   },
   ratingImage: {
     width: 40, // Slightly bigger size for a more noticeable 3D effect

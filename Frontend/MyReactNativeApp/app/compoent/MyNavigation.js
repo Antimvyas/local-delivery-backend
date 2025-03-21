@@ -16,7 +16,7 @@ const MyNavigation = ({customer_id,vendor_id}) => {
 
   // ✅ Fetch customer_id & vendor_id when component mounts
   useEffect(() => {
-    console.log("i",customerId);
+    console.log("my i",customerId);
     
     if (!customerId){
       // Alert.alert("not customer id ")
@@ -55,7 +55,7 @@ const MyNavigation = ({customer_id,vendor_id}) => {
       {/*  */}
       <TouchableOpacity
         style={styles.iconContainer}
-        onPress={() => setcomponent(!component)} 
+        onPress={() => navigation.navigate("New",{customer_id:customerId})} 
         
       >
          <Image source={require("../android/app/src/main/assets/credit1.png")}
@@ -63,7 +63,7 @@ const MyNavigation = ({customer_id,vendor_id}) => {
                         />
             
       </TouchableOpacity>
-      {component && <Credit customer_id={customerId} vendor_id={vendorId} />}
+      {/* {component && <Credit customer_id={customerId} vendor_id={vendorId} />} */}
       </View>
       <TouchableOpacity style={styles.iconContainer} onPress={() => navigation.navigate("Account", { customer_id: customerId, vendor_id: vendorId })}>
       <Image source={require("../android/app/src/main/assets/account.png")}

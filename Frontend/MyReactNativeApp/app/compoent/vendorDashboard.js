@@ -20,7 +20,7 @@ export default function VendorDashboard({ route }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Vendor Dashboard</Text>
+      {/* <Text style={styles.header}>Vendor Dashboard</Text>
 
       <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("Add_menu", { vendor_id })}>
         <Text style={styles.buttonText}>Add Menu</Text>
@@ -28,7 +28,7 @@ export default function VendorDashboard({ route }) {
 
       <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("View_menu", { vendor_id })}>
         <Text style={styles.buttonText}>View & Edit Menu</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
       <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("PendingOrder", { vendor_id })}>
         <Text style={styles.buttonText}>Pending Orders</Text>
@@ -38,13 +38,13 @@ export default function VendorDashboard({ route }) {
         <Text style={styles.buttonText}>Orders</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("UdarRequestsScreen", { vendor_id })}>
+      {/* <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("UdarRequestsScreen", { vendor_id })}>
         <Text style={styles.buttonText}>View Udar Requests</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("AccountScreen", { vendor_id })}>
         <Text style={styles.buttonText}>View Udar Customers</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
       <VendorNavigation vendor_id={vendor_id}/>
       
     </View>
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: "#FFF3E0", // Light cream-orange background
+    // backgroundColor: "#FFF3E0", // Light cream-orange background
     padding: 20,
   },
   header: {
