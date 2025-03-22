@@ -10,6 +10,7 @@ import axios from "axios";
 import { io } from "socket.io-client"; // Import socket.io-client
 import API_BASE from "../config1.js";
 import Credit_account from "./Credit_account.js";
+import VendorNavigation from "./VendorNavigation.js";
 
 export default function AccountScreen({ route, navigation }) {
   const { vendor_id } = route.params;
@@ -70,6 +71,7 @@ export default function AccountScreen({ route, navigation }) {
       )}
 
       <Credit_account vendor_id={vendor_id}/>
+      <VendorNavigation vendor_id={vendor_id}/>
     </View>
   );
 }

@@ -6,6 +6,7 @@ import axios from "axios";
 import socket from "../socket"; // WebSocket connection
 import BASE_URL from "../config";
 import API_BASE from "../config1.js"
+import VendorNavigation from "./VendorNavigation.js";
 // const API_BASE = "http://192.168.1.19:3000/api/v1";
 
 const Orders = ({ route }) => {
@@ -95,6 +96,7 @@ const Orders = ({ route }) => {
           )}
         />
       )}
+      <VendorNavigation vendor_id={vendor_id}/>
     </View>
   );
 };

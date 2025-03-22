@@ -5,6 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import BASE_URL from "../config.js";
 import API_BASE from "../config1.js"
 import Menu from './Menu.js';
+import VendorNavigation from './VendorNavigation.js';
 // const API_BASE = 'http://192.168.1.19:3000/api/v1';
 
 const ViewMenu = ({ route }) => {
@@ -39,8 +40,8 @@ const ViewMenu = ({ route }) => {
         
       }
     } catch (error) {
-      console.error("Error fetching food:", error);
-      Alert.alert('Error', 'Could not fetch menu items');
+      // console.error("Error fetching food:", error);
+      // Alert.alert('Error', 'Could not fetch menu items');
     } finally {
       setLoading(false);
     }
@@ -144,7 +145,10 @@ const ViewMenu = ({ route }) => {
           
         />
       )}
-      <Menu vendor_id={vendor_id}/>
+      
+      <Menu vendor_id={vendor_id} style={[styles.position="absolute"]}/>
+      <VendorNavigation vendor_id={vendor_id} style={[styles.position="absolute"]}/>
+     
     </View>
   );
 };
@@ -207,6 +211,17 @@ toggle:{
     height: 40,
     marginHorizontal: 5, // Space between icons
   },
+  // menu:{
+  //   flexDirection:"row",
+  //   // borderWidth:3,
+  //   justifyContent:"space-evenly",
+  //   // position:"absolute",
+  //   // height:"50%",
+  //   left:10,
+  //   alignItems:"center",
+     
+  //   bottom:8
+  // }
 });
 
 

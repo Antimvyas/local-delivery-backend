@@ -48,13 +48,16 @@ const VendorSetting = (vendor_id) => {
               {/* TouchableOpacity for navigating to "MyUdarScreen" */}
               <TouchableOpacity
                   style={styles.button}
-                  onPress={() => navigation.navigate("SetFood", {vendor_id:vendorId})}
+                  onPress={() => navigation.navigate("ManageShop", {vendor_id:vendorId})}
               >
-                  <Text>Mange food</Text>
+                  <Image
+                      source={require("../android/app/src/main/assets/time.png")}
+                      style={styles.ratingImage}
+                  />
               </TouchableOpacity>
   
               {/* TouchableOpacity for navigating to "RequestUdarScreen" */}
-              <TouchableOpacity
+              {/* <TouchableOpacity
                   style={styles.button}
                   onPress={() => navigation.navigate("AccountScreen",{vendor_id:vendorId})}
               >
@@ -62,7 +65,7 @@ const VendorSetting = (vendor_id) => {
                       source={require("../android/app/src/main/assets/credit1.png")}
                       style={styles.ratingImage}
                   />
-              </TouchableOpacity>
+              </TouchableOpacity> */}
           </View>
       );
   };
@@ -77,16 +80,16 @@ const VendorSetting = (vendor_id) => {
       bottom:70,
       right:5,
       // borderWidth:3,
-      height:"170%",
-      width: "110%",
+      height:"100%",
+      width: "100%",
      //  backgroundColor: "#fff",
       // alignItems: "center",
       // justifyContent: "space-between",
-      paddingVertical: 10,
-      paddingLeft: 5,
-      paddingRight:10,
-      boxShadow: "4px 4px 4px 6px rgba(0, 0, 0, 0.1)",  // Adding a subtle shadow
-      borderRadius: 20, // Rounded corners for 3D feel
+      // paddingVertical: 10,
+      // paddingLeft: 5,
+      // paddingRight:10,
+      // boxShadow: "4px 4px 4px 6px rgba(0, 0, 0, 0.1)",  // Adding a subtle shadow
+      borderRadius: 50, // Rounded corners for 3D feel
     },
     ratingImage: {
       width: 40, // Slightly bigger size for a more noticeable 3D effect

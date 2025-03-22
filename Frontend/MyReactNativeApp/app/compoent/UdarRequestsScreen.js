@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import axios from "axios";
 import API_BASE from "../config1.js"
+import VendorNavigation from "./VendorNavigation.js";
 export default function UdarRequestsScreen({ route }) {
   const vendor_id = route.params?.vendor_id;
   const [requests, setRequests] = useState([]);
@@ -60,6 +61,7 @@ export default function UdarRequestsScreen({ route }) {
           )}
         />
       )}
+      <VendorNavigation vendor_id={vendor_id}/>
     </View>
   );
 }

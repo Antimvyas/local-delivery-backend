@@ -28,7 +28,8 @@ import Credit from './compoent/Credit.js';
 import New from './compoent/New.js';
 import Account from './compoent/Account.js';
 import SettingsScreen from './compoent/SettingsScreen.js';
-import SetFood from './compoent/SetFood.js';
+import ManageShop from './compoent/ManageShop.js';
+
 // import Navigation from './compoent/Navigation.js';
 
 
@@ -69,7 +70,7 @@ const App = () => {
         <Stack.Screen name='VendorCustomerDetails' component={VendorCustomerDetails}/>
         <Stack.Screen name="Account" component={Account}/>
         <Stack.Screen name='SettingsScreen' component={SettingsScreen} />
-        <Stack.Screen name="SetFood" component={SetFood}/>
+        <Stack.Screen name="ManageShop" component={ManageShop}/>
         
         
 

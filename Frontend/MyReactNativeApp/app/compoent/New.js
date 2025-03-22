@@ -58,8 +58,9 @@ export default function New({ route, navigation }) {
           )}
         />
       )}
-      <Credit customer_id={customer_id}/>
-      <MyNavigation/>
+
+      <Credit    customer_id={customer_id}/>
+      <MyNavigation customer_id={customer_id}/>
     </View>
   );
 }

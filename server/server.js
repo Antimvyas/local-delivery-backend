@@ -10,6 +10,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const ioClient = require('socket.io-client'); // ✅ Import socket.io client
 const { log } = require('console');
+const { close } = require('inspector/promises');
 
 
 
@@ -266,20 +267,32 @@ app.post('/api/v1/login', (req, res) => {
 
 // update vendor
 app.post('/api/v1/add-vendor', (req, res) => {
-  const { Shop_name, shop_address, username } = req.body;
-  const updateQuery = `UPDATE vendor SET Shop_name=?, shop_address=? WHERE username=?`;
+  const { Shop_name, shop_address, username, open_close_timings } = req.body;
 
-  db.query(updateQuery, [Shop_name, shop_address, username], (err, result) => {
+  // Convert JSON string to valid MySQL JSON format
+  let timingsJSON;
+  try {
+    timingsJSON = JSON.stringify(open_close_timings);
+  } catch (error) {
+    return res.status(400).json({ error: "Invalid JSON format for open_close_timings" });
+  }
+
+  // ✅ Update vendor details and store timings
+  const updateQuery = `UPDATE vendor SET Shop_name=?, shop_address=?, open_close_timings=? WHERE username=?`;
+
+  db.query(updateQuery, [Shop_name, shop_address, timingsJSON, username], (err, result) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
+
+    // ✅ Fetch the vendor_id after update
     const fetchVendorIdQuery = `SELECT vendor_id FROM vendor WHERE username=?`;
-    
+
     db.query(fetchVendorIdQuery, [username], (err, rows) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      
+
       if (rows.length > 0) {
         const vendor_id = rows[0].vendor_id;
         res.status(201).json({ message: 'Vendor updated successfully!', vendor_id });
@@ -289,6 +302,7 @@ app.post('/api/v1/add-vendor', (req, res) => {
     });
   });
 });
+
 
 
 
@@ -1328,6 +1342,93 @@ app.post("/api/v1/toggle-food", (req, res) => {
      console.log("h",result);
      
     res.json({ message: "Food availability updated successfully" });
+  });
+});
+//fetch the opening timeings 
+app.get('/api/v1/vendor-details', (req, res) => {
+  const { vendor_id } = req.query;
+
+  if (!vendor_id) {
+    return res.status(400).json({ error: "Vendor ID is required" });
+  }
+
+  const query = `SELECT Shop_name, open_close_timings ,is_online FROM vendor WHERE vendor_id = ?`;
+
+  db.query(query, [vendor_id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (result.length > 0) {
+      res.json(result[0]);
+    } else {
+      res.status(404).json({ error: "Vendor not found" });
+    }
+  });
+});
+
+
+//  get the shop timings
+
+app.get("/api/v1/vendor-timings/:vendorId", (req, res) => {
+  const { vendorId } = req.params;
+  console.log(vendorId);
+  
+  const query = `SELECT open_close_timings, is_online FROM vendor WHERE vendor_id = ?`;
+
+  db.query(query, [vendorId], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    if (result.length > 0) {
+      res.json(result[0]);
+      console.log("r",result);
+      
+    } else {
+      res.status(404).json({ error: "Vendor not found" });
+    }
+  });
+});
+
+
+// update timeings
+
+app.post("/api/v1/update-shop-timings/:vendorId", (req, res) => {
+  const { vendorId } = req.params;
+  const { open_close_timings } = req.body;
+ console.log("t",open_close_timings);
+ 
+  let timeings
+  try{
+    timeings=JSON.stringify(open_close_timings)
+  }catch(err){
+    console.log("error");
+    
+  }
+  const query = `UPDATE vendor SET open_close_timings = ? WHERE vendor_id = ?`;
+   console.log("T",timeings);
+   
+  db.query(query, [timeings, vendorId], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    res.json({ message: "Shop timings updated successfully!" });
+  });
+});
+
+// tooggle shop
+
+app.post("/api/v1/update-shop-online-status/:vendorId", (req, res) => {
+  const { vendorId } = req.params;
+  const { isOnline } = req.body;
+
+  const query = `UPDATE vendor SET is_online = ? WHERE vendor_id = ?`;
+
+  db.query(query, [isOnline ? 1 : 0, vendorId], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    res.json({
+      message: `Shop is now ${isOnline ? "Open" : "Closed"}`,
+      isOnline
+    });
   });
 });
 
