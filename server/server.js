@@ -393,6 +393,7 @@ app.get('/api/v1/vendors', (req, res) => {
       v.vendor_id, 
       v.Shop_name, 
       v.shop_address, 
+      v.is_online,
       GROUP_CONCAT(DISTINCT f.food_type ORDER BY f.food_type SEPARATOR ', ') AS food_types, 
       GROUP_CONCAT(DISTINCT f.food_img ORDER BY f.food_img SEPARATOR ', ') AS food_images
     FROM vendor v

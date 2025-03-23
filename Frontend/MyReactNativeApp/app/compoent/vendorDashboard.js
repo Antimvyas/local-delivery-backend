@@ -9,11 +9,11 @@ import VendorNavigation from './VendorNavigation.js';
 
 export default function VendorDashboard({ route }) {
   const navigation = useNavigation();
+  const [location, setLocation] = useState(null);
   const vendor_id = route.params?.vendor_id?.vendor_id ?? route.params?.vendor_id;
-  const [location, setLocation] = useState(null); 
   const [shopName, setShopName] = useState('');
   const [openCloseTimings, setOpenCloseTimings] = useState([]);
-  const [isOnline, setIsOnline] = useState(false); // State for shop open/closed status
+  const [isOnline, setIsOnline] = useState(false);
 
   useEffect(() => {
     if (!vendor_id) {
@@ -26,74 +26,71 @@ export default function VendorDashboard({ route }) {
     fetchShopDetails();
   }, [vendor_id]);
 
-      // ✅ Live Location Tracking
-      // useEffect(() => {
-      //   let watchId = null;
+  // ✅ Fetch shop details
+  // ✅ Live Location Tracking
+      useEffect(() => {
+        let watchId = null;
       
-      //   const requestLocationPermission = async () => {
-      //     try {
-      //       if (Platform.OS === 'android') {
-      //         const granted = await PermissionsAndroid.request(
-      //           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      //           {
-      //             title: 'Location Permission',
-      //             message: 'This app needs location access to track your shop location.',
-      //             buttonNeutral: 'Ask Me Later',
-      //             buttonNegative: 'Cancel',
-      //             buttonPositive: 'OK',
-      //           }
-      //         );
+        const requestLocationPermission = async () => {
+          try {
+            if (Platform.OS === 'android') {
+              const granted = await PermissionsAndroid.request(
+                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                {
+                  title: 'Location Permission',
+                  message: 'This app needs location access to track your shop location.',
+                  buttonNeutral: 'Ask Me Later',
+                  buttonNegative: 'Cancel',
+                  buttonPositive: 'OK',
+                }
+              );
       
-      //         if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-      //           console.log('Location permission denied');
-      //           return;
-      //         }
-      //       }
+              if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+                console.log('Location permission denied');
+                return;
+              }
+            }
       
-      //       // ✅ Get current location once (prevents crashes on startup)
-      //       Geolocation.getCurrentPosition(
-      //         (position) => {
-      //           setLocation(position.coords);
-      //         },
-      //         (error) => {
-      //           console.error("Initial Location Error:", error.message);
-      //         },
-      //         { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-      //       );
+            // ✅ Get current location once (prevents crashes on startup)
+            Geolocation.getCurrentPosition(
+              (position) => {
+                setLocation(position.coords);
+              },
+              (error) => {
+                console.error("Initial Location Error:", error.message);
+              },
+              { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+            );
       
-      //       // ✅ Start watching the user's location continuously
-      //       watchId = Geolocation.watchPosition(
-      //         (position) => {
-      //           setLocation(position.coords);
-      //         },
-      //         (error) => {
-      //           console.error("Live Location Error:", error.message);
-      //         },
-      //         {
-      //           enableHighAccuracy: true,
-      //           distanceFilter: 10, // Update only if moved 10 meters
-      //           interval: 10000, // Every 10 seconds
-      //           fastestInterval: 5000,
-      //         }
-      //       );
-      //     } catch (err) {
-      //       console.warn("Permission request error:", err);
-      //     }
-      //   };
+            // ✅ Start watching the user's location continuously
+            watchId = Geolocation.watchPosition(
+              (position) => {
+                setLocation(position.coords);
+              },
+              (error) => {
+                console.error("Live Location Error:", error.message);
+              },
+              {
+                enableHighAccuracy: true,
+                distanceFilter: 10, // Update only if moved 10 meters
+                interval: 10000, // Every 10 seconds
+                fastestInterval: 5000,
+              }
+            );
+          } catch (err) {
+            console.warn("Permission request error:", err);
+          }
+        };
       
-      //   requestLocationPermission();
+        requestLocationPermission();
       
-      //   // ✅ Cleanup to prevent crashes when component unmounts
-      //   return () => {
-      //     if (watchId !== null) {
-      //       Geolocation.clearWatch(watchId);
-      //     }
-      //   };
-      // }, []);
-      
-      
-
-  // ✅ Fetch shop details (Shop Name, Timings, and Online Status)
+        // ✅ Cleanup to prevent crashes when component unmounts
+        return () => {
+          if (watchId !== null) {
+            Geolocation.clearWatch(watchId);
+          }
+        };
+      }, []);
   const fetchShopDetails = async () => {
     try {
       const response = await fetch(`${API_BASE}/vendor-details?vendor_id=${vendor_id}`);
@@ -102,21 +99,21 @@ export default function VendorDashboard({ route }) {
 
       if (data) {
         setShopName(data.Shop_name || "Unknown Shop");
-        setIsOnline(data.is_online || false); // Set shop online/offline status
+        setIsOnline(data.is_online || false);
 
-        // Ensure open_close_timings is parsed correctly and converted to an array for FlatList
+        // ✅ Properly parse `open_close_timings`
         let timings = data.open_close_timings;
 
         if (typeof timings === "string") {
           try {
-            timings = JSON.parse(timings); // First decode
-            timings = JSON.parse(timings); // Second decode (fixes double-encoding)
+            timings = JSON.parse(JSON.parse(timings)); // Double parse to remove extra encoding
           } catch (error) {
             console.error("Error parsing timings:", error);
-            timings = {};
+            timings = [];
           }
         }
-        setOpenCloseTimings(timings ? Object.entries(timings) : []);
+
+        setOpenCloseTimings(timings);
       }
     } catch (error) {
       console.error("Error fetching shop details:", error);
@@ -130,12 +127,7 @@ export default function VendorDashboard({ route }) {
       <View style={styles.shopInfo}>
         <Text style={styles.shopName}>{shopName}</Text>
       </View>
-      {/* ✅ Display Live Location */}
-      {/* 
       
-      
-      
-      */}
 
       {/* ✅ Shop Open/Closed Status */}
       <View style={styles.shopStatusContainer}>
@@ -144,16 +136,16 @@ export default function VendorDashboard({ route }) {
         </Text>
       </View>
 
-      {/* ✅ Opening & Closing Timings Using FlatList */}
+      {/* ✅ Display Opening & Closing Timings */}
       <View style={styles.timingsContainer}>
         <Text style={styles.timingsHeader}>Opening & Closing Timings:</Text>
-        {openCloseTimings.length > 0 ? (
+        {openCloseTimings.length > ""? (
           <FlatList
             data={openCloseTimings}
-            keyExtractor={(item) => item[0]} // Using day name as key
+            keyExtractor={(item) => item.day}
             renderItem={({ item }) => (
               <Text style={styles.timingText}>
-                {item[0]}: {item[1]?.open} - {item[1]?.close}
+                {item.day}: {item.open.trim() || "Closed"} {item.close ? `- ${item.close.trim()}` : ""}
               </Text>
             )}
           />
@@ -253,3 +245,4 @@ const styles = StyleSheet.create({
   },
 });
 
+// export default VendorDashboard;

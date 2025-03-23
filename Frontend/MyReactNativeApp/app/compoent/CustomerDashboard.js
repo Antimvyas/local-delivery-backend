@@ -29,7 +29,8 @@ const CustomerDashboard = ({ navigation, route }) => {
       const response = await axios.get(`${API_BASE}/vendors`);
       setVendors(response.data);
       setLoading(false);
-
+      console.log(response.data);
+      
       // Initialize image index tracking for each vendor
       const initialIndexes = {};
       response.data.forEach(vendor => {
@@ -61,9 +62,10 @@ const CustomerDashboard = ({ navigation, route }) => {
   }, [vendors]);
 
   const filteredVendors = vendors.filter((vendor) =>
-    vendor.Shop_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (vendor.Shop_name && vendor.Shop_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
     (vendor.food_types && vendor.food_types.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+  
 
   return (
     <View style={styles.container}>
@@ -77,46 +79,51 @@ const CustomerDashboard = ({ navigation, route }) => {
           onChangeText={setSearchQuery}
         />
       </View>
-      <TouchableOpacity 
+      {/* <TouchableOpacity 
         style={styles.settingsButton}
         onPress={() => navigation.navigate("SettingsScreen")}
       >
        <Image source={require("../android/app/src/main/assets/search.png")} style={styles.ratingImage} />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
       {loading ? (
         <ActivityIndicator size="large" color="#FF5733" />
       ) : (
-        <FlatList
+      <FlatList
           data={filteredVendors}
-          keyExtractor={(item) => item.vendor_id.toString()}
-          renderItem={({ item }) => {
-            const imagesArray = item.food_images ? item.food_images.split(", ") : [];
-            const currentImage = imagesArray[imageIndexes[item.vendor_id]] || "";
+            keyExtractor={(item) => item.vendor_id.toString()}
+    renderItem={({ item }) => {
+      const imagesArray = item.food_images ? item.food_images.split(", ") : [];
+      const currentImage = imagesArray[imageIndexes[item.vendor_id]] || "";
 
-            return (
-              <TouchableOpacity 
-                style={styles.card} 
-                onPress={() => navigation.navigate("FoodList", { vendor_id: item.vendor_id, customer_id })}
-              >
-                {/* 🏪 Vendor Info */}
-                <View style={styles.info}>
-                  <Text style={styles.shopName}>{item.Shop_name}</Text>
-                  <Text style={styles.address}>{item.shop_address}</Text>
+      return (
+        <TouchableOpacity 
+          style={styles.card} 
+          onPress={() => navigation.navigate("FoodList", { vendor_id: item.vendor_id, customer_id })}
+        >
+          {/* 🏪 Vendor Info */}
+          <View style={styles.info}>
+            <Text style={styles.shopName}>{item.Shop_name}</Text>
+            <Text style={styles.address}>{item.shop_address}</Text>
 
-                  {/* 🍽️ Show All Food Types */}
-                  <Text style={styles.foodTypes}>🍽️ {item.food_types || "No Types"}</Text>
-                </View>
+            {/* 🍽️ Food Types */}
+            <Text style={styles.foodTypes}>🍽️ {item.food_types || "No Types"}</Text>
 
-                {/* 🍔 Rotating Food Image */}
-                {currentImage ? (
-                  <Image source={{ uri: `${BASE_URL}${currentImage}` }} style={styles.image} />
-                ) : (
-                  <Text style={styles.noImageText}>No Image Available</Text>
-                )}
-              </TouchableOpacity>
-            );
-          }}
-        />
+            {/* ✅ Show Open/Closed Status Based on is_online */}
+            <Text style={[styles.status, item.is_online ? styles.open : styles.closed]}>
+              {item.is_online ? "🟢 Open" : "🔴 Closed"}
+            </Text>
+          </View>
+
+          {/* 🍔 Rotating Food Image */}
+          {currentImage ? (
+            <Image source={{ uri: `${BASE_URL}${currentImage}` }} style={styles.image} />
+          ) : (
+            <Text style={styles.noImageText}>No Image Available</Text>
+          )}
+        </TouchableOpacity>
+      );
+    }}
+  />
       )}
 
       <MyNavigation customer_id={customer_id}/>
@@ -155,6 +162,20 @@ const styles = StyleSheet.create({
     height: 40,
     fontSize: 16,
   },
+  status: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginTop: 5,
+  },
+  
+  open: {
+    color: "green",
+  },
+  
+  closed: {
+    color: "red",
+  },
+  
 
   card: {
     width: "90%",

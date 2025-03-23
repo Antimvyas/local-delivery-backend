@@ -16,14 +16,13 @@ const ManageShop = ({ route }) => {
   const vendorId = route.params?.vendor_id;
   const [shopTimings, setShopTimings] = useState({});
   const [isShopOnline, setIsShopOnline] = useState(false);
-  const [editedTimings, setEditedTimings] = useState({});
+  const [editedTimings, setEditedTimings] = useState([]);
 
   useEffect(() => {
     fetchShopDetails();
-    
   }, []);
 
-  // Fetch shop details including timings and online status
+  // ✅ Fetch shop details including timings and online status
   const fetchShopDetails = async () => {
     try {
       const res = await axios.get(`${API_BASE}/vendor-timings/${vendorId}`);
@@ -32,27 +31,26 @@ const ManageShop = ({ route }) => {
       let timings = data.open_close_timings;
       if (typeof timings === "string") {
         try {
-          // It seems the timings are JSON-encoded twice.
-          timings = JSON.parse(timings);
-          timings = JSON.parse(timings);
+          // ✅ Fix JSON double-encoding issue
+          timings = JSON.parse(JSON.parse(timings));
         } catch (error) {
           console.error("Error parsing timings:", error);
-          timings = {};
+          timings = [];
         }
       }
 
-      setShopTimings(timings || {});
-      setEditedTimings(timings || {});
+      setShopTimings(timings || []);
+      setEditedTimings(timings || []);
       setIsShopOnline(data.is_online);
     } catch (error) {
       console.error("Error fetching shop details:", error);
     }
   };
 
-  // Update shop timings via API
+  // ✅ Update shop timings via API
   const updateShopTimings = async () => {
     try {
-      console.log("time", JSON.stringify(editedTimings));
+      console.log("Updating timings:", JSON.stringify(editedTimings));
       await axios.post(`${API_BASE}/update-shop-timings/${vendorId}`, {
         open_close_timings: JSON.stringify(editedTimings)
       });
@@ -63,7 +61,7 @@ const ManageShop = ({ route }) => {
     }
   };
 
-  // Manual toggle for shop online status
+  // ✅ Toggle shop online status
   const toggleShopOnlineStatus = async () => {
     try {
       const newStatus = !isShopOnline;
@@ -76,88 +74,18 @@ const ManageShop = ({ route }) => {
     }
   };
 
-  // Handle changes in timing values from TextInputs
-  const handleTimingChange = (day, type, value) => {
-    setEditedTimings((prev) => ({
-      ...prev,
-      [day]: {
-        ...prev[day],
-        [type]: value
-      }
-    }));
+  // ✅ Handle time changes
+  const handleTimingChange = (index, type, value) => {
+    const updatedTimings = [...editedTimings];
+    updatedTimings[index][type] = value;
+    setEditedTimings(updatedTimings);
   };
-
-  // Auto-update shop status based on current time and day’s timings
-  const convertTo24Hour = (time) => {
-    if (!time) return null;
-  
-    const [hourMinute, period] = time.split(" ");
-    let [hours, minutes] = hourMinute.split(":").map(Number);
-  
-    if (period.toLowerCase() === "PM" && hours !== 12) {
-      hours += 12;
-    } else if (period.toLowerCase() === "AM" && hours === 12) {
-      hours = 0;
-    }
-  
-    return hours * 60 + minutes; // Convert to total minutes
-  };
-  
-  const autoUpdateStatus = () => {
-    if (!Object.keys(shopTimings).length) return;
-  
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const dayNames = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday"
-    ];
-    const currentDay = dayNames[now.getDay()];
-  
-    const todaysTiming = shopTimings[currentDay];
-    if (todaysTiming && todaysTiming.open && todaysTiming.close) {
-      const openMinutes = convertTo24Hour(todaysTiming.open);
-      const closeMinutes = convertTo24Hour(todaysTiming.close);
-  
-      if (openMinutes !== null && closeMinutes !== null) {
-        const computedStatus =
-          currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
-  
-        if (computedStatus !== isShopOnline) {
-          axios
-            .post(`${API_BASE}/update-shop-online-status/${vendorId}`, {
-              isOnline: computedStatus
-            })
-            .then((response) => {
-              setIsShopOnline(computedStatus);
-              setShopStatusMessage(response.data.message); // ✅ Store response message
-            })
-            .catch((error) => {
-              console.error("Error auto updating shop online status:", error);
-              setShopStatusMessage("Failed to update shop status.");
-            });
-        }
-      }
-    }
-  };
-  
-  
-
-  // Set up an interval to check the auto status every minute
-  useEffect(() => {
-    autoUpdateStatus();
-  }, [shopTimings, isShopOnline]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Manage Shop Timings</Text>
 
-      {/* ✅ Toggle Switch for Shop Online/Offline with conditional color */}
+      {/* ✅ Toggle Switch for Shop Online/Offline */}
       <View style={styles.switchContainer}>
         <Text style={styles.switchLabel}>Shop Online:</Text>
         <Switch
@@ -168,35 +96,38 @@ const ManageShop = ({ route }) => {
         />
       </View>
 
-      {/* ✅ Editable Opening & Closing Timings */}
+      {/* ✅ Display and Edit Opening & Closing Timings */}
       <View style={styles.timingsContainer}>
         <Text style={styles.timingsHeader}>Edit Shop Timings:</Text>
-        <FlatList
-          data={Object.entries(editedTimings)}
-          keyExtractor={(item) => item[0]}
-          renderItem={({ item }) => (
-            <View style={styles.timingRow}>
-              <Text style={styles.dayText}>{item[0]}:</Text>
-              <TextInput
-                style={styles.input}
-                value={item[1]?.open}
-                onChangeText={(text) => handleTimingChange(item[0], "open", text)}
-                placeholder="Open Time"
-              />
-              <TextInput
-                style={styles.input}
-                value={item[1]?.close}
-                onChangeText={(text) =>
-                  handleTimingChange(item[0], "close", text)
-                }
-                placeholder="Close Time"
-              />
-            </View>
-          )}
-        />
+        {editedTimings.length > 0 ? (
+          <FlatList
+            data={editedTimings}
+            keyExtractor={(item) => item.day}
+            renderItem={({ item, index }) => (
+              <View style={styles.timingRow}>
+                <Text style={styles.dayText}>{item.day}:</Text>
+                <TextInput
+                  style={styles.input}
+                  value={item.open}
+                  onChangeText={(text) => handleTimingChange(index, "open", text)}
+                  placeholder="Open Time"
+                />
+                <Text style={styles.toText}>to</Text>
+                <TextInput
+                  style={styles.input}
+                  value={item.close}
+                  onChangeText={(text) => handleTimingChange(index, "close", text)}
+                  placeholder="Close Time"
+                />
+              </View>
+            )}
+          />
+        ) : (
+          <Text style={styles.noTimingsText}>No timings available</Text>
+        )}
       </View>
 
-      {/* ✅ Save Changes Button */}
+      {/* ✅ Save Button */}
       <TouchableOpacity style={styles.saveButton} onPress={updateShopTimings}>
         <Text style={styles.buttonText}>Save Timings</Text>
       </TouchableOpacity>
@@ -204,54 +135,20 @@ const ManageShop = ({ route }) => {
   );
 };
 
+// ✅ **Styles**
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center"
-  },
-  switchContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20
-  },
+  title: { fontSize: 22, fontWeight: "bold", marginBottom: 20, textAlign: "center" },
+  switchContainer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   switchLabel: { fontSize: 18, fontWeight: "bold" },
-  timingsContainer: {
-    backgroundColor: "#f9f9f9",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 20
-  },
-  timingsHeader: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 5
-  },
-  timingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10
-  },
+  timingsContainer: { backgroundColor: "#f9f9f9", padding: 15, borderRadius: 10, marginBottom: 20 },
+  timingsHeader: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
+  timingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   dayText: { fontSize: 16, fontWeight: "bold", width: 100 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 5,
-    borderRadius: 5,
-    width: 80,
-    textAlign: "center",
-    marginLeft: 5
-  },
-  saveButton: {
-    backgroundColor: "#FF5733",
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 10
-  },
+  toText: { fontSize: 16, fontWeight: "500" },
+  input: { borderWidth: 1, borderColor: "#ccc", padding: 8, borderRadius: 5, width: 80, textAlign: "center" },
+  noTimingsText: { fontSize: 16, color: "gray", textAlign: "center", marginTop: 10 },
+  saveButton: { backgroundColor: "#FF5733", padding: 15, borderRadius: 10, alignItems: "center", marginTop: 10 },
   buttonText: { fontSize: 18, color: "#fff", fontWeight: "bold" }
 });
 

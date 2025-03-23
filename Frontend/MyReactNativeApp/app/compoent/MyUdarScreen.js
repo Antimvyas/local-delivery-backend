@@ -1,39 +1,70 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, TouchableOpacity, TextInput, Alert, StyleSheet, ScrollView } from "react-native";
 import axios from "axios";
+import { Picker } from "@react-native-picker/picker";
 import MyNavigation from "./MyNavigation.js";
 import API_BASE from "../config1.js";
 
 export default function MyUdarScreen({ route }) {
   const { customer_id } = route.params;
   const [ShopName, setShopName] = useState("");
-  const[vendor_id,setvendorId]=useState("");
+  const [vendor_id, setVendorId] = useState("");
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [groupedTransactions, setGroupedTransactions] = useState({});
   const [totalSummary, setTotalSummary] = useState({});
   const [paymentAmount, setPaymentAmount] = useState("");
 
+  const today = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1); // ✅ Default to current month
+
   useEffect(() => {
     fetchUdarRecords();
-  }, []);
+  }, [selectedMonth]); // ✅ Fetch data whenever month changes
 
   const fetchUdarRecords = async () => {
     try {
-      console.log("or", customer_id);
-      
+      console.log("Fetching records for customer_id:", customer_id);
       const response = await axios.get(`${API_BASE}/customer/udar/${customer_id}`);
+
       setShopName(response.data.Shop_name);
-      
       setTotalSummary(response.data.totalSummary);
-      groupByOrderId(response.data.transactions);
-      setvendorId(response.data.vendor_id);
-      // console.log(      
-        // "id",vendor_id      );
-      
+      setVendorId(response.data.vendor_id);
+      setAllTransactions(response.data.transactions);
+
+      filterTransactions(response.data.transactions, selectedMonth);
     } catch (error) {
       console.error("Error fetching Udar records:", error);
     }
   };
 
+  // ✅ Filter Transactions by Month
+  const filterTransactions = (transactions, month) => {
+    const filtered = transactions.filter((transaction) => {
+      const transactionDate = parseDate(transaction.order_date_time);
+      return transactionDate && transactionDate.getMonth() + 1 === month && transactionDate.getFullYear() === today.getFullYear();
+    });
+
+    setFilteredTransactions(filtered);
+    groupByOrderId(filtered);
+  };
+
+  // ✅ Function to Parse Date Correctly
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    
+    let parsedDate = new Date(dateString);
+
+    if (isNaN(parsedDate)) {
+      const parts = dateString.split(/[- :T]/);
+      if (parts.length >= 3) {
+        parsedDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      }
+    }
+    return parsedDate;
+  };
+
+  // ✅ Group Transactions by Order ID
   const groupByOrderId = (transactions) => {
     const grouped = {};
     transactions.forEach((item) => {
@@ -57,27 +88,28 @@ export default function MyUdarScreen({ route }) {
     setGroupedTransactions(grouped);
   };
 
+  // ✅ Request Payment Function
   const requestPayment = async () => {
     const amount = parseFloat(paymentAmount || 0);
-    const maxAmount = totalSummary.total_balance_due || 0; // Pending amount
-  
+    const maxAmount = totalSummary.total_balance_due || 0;
+
     if (isNaN(amount) || amount <= 0) {
       Alert.alert("Invalid Amount", "Please enter a valid payment amount.");
       return;
     }
-  
+
     if (amount > maxAmount) {
       Alert.alert("Payment Limit Exceeded", `You cannot pay more than ₹${maxAmount}`);
       return;
     }
-  
+
     try {
       const response = await axios.post(`${API_BASE}/request-payment`, {
         customer_id,
         amount,
         vendor_id
       });
-  
+
       if (response.data.success) {
         Alert.alert("✅ Payment Request Sent", "The vendor has been notified.");
         setPaymentAmount("");
@@ -89,85 +121,87 @@ export default function MyUdarScreen({ route }) {
       Alert.alert("Error", "Failed to connect to the server.");
     }
   };
-  
 
   return (
     <View style={styles.container}>
       <Text style={styles.header}>{ShopName}'s Transactions</Text>
 
+      {/* ✅ Month Filter */}
+      <View style={styles.filterContainer}>
+        <Picker
+          selectedValue={selectedMonth}
+          onValueChange={(itemValue) => setSelectedMonth(itemValue)}
+          style={styles.picker}
+        >
+          {Array.from({ length: 12 }, (_, i) => (
+            <Picker.Item key={i} label={new Date(today.getFullYear(), i).toLocaleString("default", { month: "long" })} value={i + 1} />
+          ))}
+        </Picker>
+      </View>
+
       <ScrollView style={styles.scrollView}>
         <View>
           {Object.keys(groupedTransactions).map((orderId) => {
             const order = groupedTransactions[orderId];
+            const formattedDate = parseDate(order.order_date_time);
             return (
               <View style={styles.card} key={orderId}>
                 <Text style={styles.orderHeader}>Order ID: {orderId}</Text>
                 <Text style={styles.orderDate}>
-                  {new Date(order.order_date_time).toLocaleDateString()} | {new Date(order.order_date_time).toLocaleTimeString()}
+                  Date: {formattedDate ? formattedDate.toLocaleDateString() : "Invalid Date"} | Time:{" "}
+                  {formattedDate ? formattedDate.toLocaleTimeString() : "Invalid Time"}
                 </Text>
 
-                {/* Two-Column Layout for Order Details */}
                 {order.items.map((foodItem, index) => (
                   <Text key={index} style={styles.foodItem}>
                     {foodItem.food_name} (x{foodItem.quantity}) - ₹{foodItem.cost}
                   </Text>
                 ))}
+
                 <View style={styles.cardContent}>
-                  {/* Left Column */}
                   <View style={styles.column}>
                     <Text style={styles.summaryText}>Total: ₹{order.total_cost}</Text>
-                    {/* <Text style={styles.credit}>You Received: ₹{order.total_credit}</Text> */}
                   </View>
-
-                  {/* Right Column */}
                   <View style={styles.column}>
                     <Text style={styles.debit}>You Paid: ₹{order.total_debit}</Text>
-                    {/* <Text style={styles.pending}>You will Pay: ₹{order.balance_due}</Text> */}
                   </View>
                 </View>
-
-                {/* Food Items List */}
-               
               </View>
             );
           })}
         </View>
       </ScrollView>
 
-      {/* Grand Total Summary & Payment Section */}
-      <View style={styles.bottomSection}>
-        <View style={styles.Grand}>
-          <Text style={styles.summaryTitle}>Grand Total Summary</Text>
-          {/* <Text style={styles.text1}>Total Cost: ₹{totalSummary.total_cost}</Text> */}
-          <Text style={styles.text2}>Grand Total  ₹{totalSummary.total_credit}</Text>
-          <Text style={styles.text3}> You Paid:     ₹{totalSummary.total_debit}</Text>
-          <Text style={styles.text4}>You Will Pay:    ₹{totalSummary.total_balance_due}</Text>
-        </View>
-
-        {/* Payment Input & Button */}
-        <View style={styles.paymentContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter amount to pay"
-            keyboardType="numeric"
-            value={paymentAmount}
-            onChangeText={setPaymentAmount}
-          />
-          <TouchableOpacity style={styles.button} onPress={requestPayment}>
-            <Text style={styles.buttonText}>Paid</Text>
-          </TouchableOpacity>
-        </View>
+      {/* ✅ Grand Total Summary */}
+      <View style={styles.Grand}>
+        <Text style={styles.summaryTitle}>Grand Total Summary</Text>
+        <Text style={styles.text2}>Grand Total ₹{totalSummary.total_credit}</Text>
+        <Text style={styles.text3}>You Paid: ₹{totalSummary.total_debit}</Text>
+        <Text style={styles.text4}>You Will Pay: ₹{totalSummary.total_balance_due}</Text>
       </View>
-      {/* console.log("Passing customer_id to MyNavigation:", customer_id); */}
-      <MyNavigation customer_id={customer_id} />
+
+      {/* ✅ Payment Input & Button */}
+      <View style={styles.paymentContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter amount to pay"
+          keyboardType="numeric"
+          value={paymentAmount}
+          onChangeText={setPaymentAmount}
+        />
+        <TouchableOpacity style={styles.button} onPress={requestPayment}>
+          <Text style={styles.buttonText}>Pay</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* <MyNavigation customer_id={customer_id} /> */}
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", padding: 10 },
   // scrollView: { flex: 1, marginBottom: 150 },
-  header: { fontSize: 22, fontWeight: "bold", textAlign: "center", marginVertical: 10, color: "#FF4500" },
+  header: { fontSize: 18, fontWeight: "bold", marginVertical: 10, color: "#4A4A4A" },
 
   card: {
     width: "90%",
@@ -190,6 +224,13 @@ const styles = StyleSheet.create({
 
   column: {
     width: "48%",
+  },
+  picker:{
+    // borderWidth:2,\
+    alignItems:"center",
+    left:10,
+    fontWeight:"bold"
+    
   },
 
   orderHeader: { fontSize: 16, fontWeight: "bold", color: "#333", marginBottom: 5 },
@@ -217,6 +258,17 @@ const styles = StyleSheet.create({
     
     boxShadow: "5px 5px 7px rgba(93, 93, 93, 0.4)",
   },
+  filterContainer:{
+    // borderWidth:3,
+    width:"40%",
+    color:"#4A4A4A",
+    right:-210,
+    // alignItems:"center",
+    height:"7%",
+    borderRadius:20,
+    boxShadow: "5px 5px 7px rgba(93, 93, 93, 0.4)",
+  },
+
   summaryTitle:{
     fontWeight:"bold",
     color:"#4A4A4A",
