@@ -1,96 +1,87 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, StyleSheet, FlatList } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import API_BASE from "../config1.js";
-import Geolocation from 'react-native-geolocation-service';
-import { PermissionsAndroid, Platform } from 'react-native';
-
-import VendorNavigation from './VendorNavigation.js';
-
+import React, { useState, useEffect } from "react";
+import {
+  View, Text,  TouchableOpacity,  Alert,  StyleSheet,  FlatList,  ActivityIndicator,
+  PermissionsAndroid,  Platform,} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import Geolocation from "react-native-geolocation-service";
+import { request, PERMISSIONS, RESULTS } from "react-native-permissions";
+import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps";
+import API_BASE from "../config1";
+import VendorNavigation from "./VendorNavigation";
 export default function VendorDashboard({ route }) {
   const navigation = useNavigation();
-  const [location, setLocation] = useState(null);
   const vendor_id = route.params?.vendor_id?.vendor_id ?? route.params?.vendor_id;
+  const [location, setLocation] = useState(null);
+  const [radius, setRadius] = useState(2000);
+  const [loading, setLoading] = useState(true);
   const [shopName, setShopName] = useState('');
   const [openCloseTimings, setOpenCloseTimings] = useState([]);
   const [isOnline, setIsOnline] = useState(false);
 
+
+  const [errorMessage, setErrorMessage] = useState(null); // ✅ Shows error on screen
+
   useEffect(() => {
-    if (!vendor_id) {
-      Alert.alert('Error', 'Vendor ID not found!', [
-        { text: 'Go Back', onPress: () => navigation.goBack() },
-      ]);
-      return;
-    }
-
+    requestLocationPermission();
     fetchShopDetails();
-  }, [vendor_id]);
+  }, []);
 
-  // ✅ Fetch shop details
-  // ✅ Live Location Tracking
-      useEffect(() => {
-        let watchId = null;
-      
-        const requestLocationPermission = async () => {
-          try {
-            if (Platform.OS === 'android') {
-              const granted = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                {
-                  title: 'Location Permission',
-                  message: 'This app needs location access to track your shop location.',
-                  buttonNeutral: 'Ask Me Later',
-                  buttonNegative: 'Cancel',
-                  buttonPositive: 'OK',
-                }
-              );
-      
-              if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-                console.log('Location permission denied');
-                return;
-              }
-            }
-      
-            // ✅ Get current location once (prevents crashes on startup)
-            Geolocation.getCurrentPosition(
-              (position) => {
-                setLocation(position.coords);
-              },
-              (error) => {
-                console.error("Initial Location Error:", error.message);
-              },
-              { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-            );
-      
-            // ✅ Start watching the user's location continuously
-            watchId = Geolocation.watchPosition(
-              (position) => {
-                setLocation(position.coords);
-              },
-              (error) => {
-                console.error("Live Location Error:", error.message);
-              },
-              {
-                enableHighAccuracy: true,
-                distanceFilter: 10, // Update only if moved 10 meters
-                interval: 10000, // Every 10 seconds
-                fastestInterval: 5000,
-              }
-            );
-          } catch (err) {
-            console.warn("Permission request error:", err);
+  // ✅ Request Location Permission
+  const requestLocationPermission = async () => {
+    try {
+      let result;
+      if (Platform.OS === "android") {
+        result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
+        if (result === PermissionsAndroid.RESULTS.GRANTED) {
+          // getLocation();
+        } else {
+          setErrorMessage("Permission Denied: Please allow location access.");
+        }
+      } else {
+        result = await request(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
+        if (result === RESULTS.GRANTED) {
+          // getLocation();
+        } else {
+          setErrorMessage("Permission Denied: Please allow location access.");
+        }
+      }
+    } catch (error) {
+      setErrorMessage(`Permission Error: ${error.message}`);
+    }
+  };
+
+  // ✅ Get Location Function
+  const getLocation = () => {
+    setLoading(true);
+    try {
+      Geolocation.getCurrentPosition(
+        (position) => {
+          if (!position || !position.coords) {
+            setErrorMessage("Location data is missing.");
+            return;
           }
-        };
-      
-        requestLocationPermission();
-      
-        // ✅ Cleanup to prevent crashes when component unmounts
-        return () => {
-          if (watchId !== null) {
-            Geolocation.clearWatch(watchId);
-          }
-        };
-      }, []);
+          setLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          });
+          setLoading(false);
+        },
+        (error) => {
+          setErrorMessage(`Geolocation error: ${error.message}`);
+          setLoading(false);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      );
+    } catch (error) {
+      setErrorMessage(`Unexpected Error: ${error.message}`);
+      setLoading(false);
+    }
+  };
+
   const fetchShopDetails = async () => {
     try {
       const response = await fetch(`${API_BASE}/vendor-details?vendor_id=${vendor_id}`);
@@ -101,7 +92,7 @@ export default function VendorDashboard({ route }) {
         setShopName(data.Shop_name || "Unknown Shop");
         setIsOnline(data.is_online || false);
 
-        // ✅ Properly parse `open_close_timings`
+        // ✅ Properly parse open_close_timings
         let timings = data.open_close_timings;
 
         if (typeof timings === "string") {
@@ -122,6 +113,45 @@ export default function VendorDashboard({ route }) {
   };
 
   return (
+    <View style={styles.container}>
+      
+      {/* ✅ Show Error on Screen */}
+      {/* {errorMessage && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      )} */}
+
+      {/* ✅ Show loading spinner until location is available */}
+      {/* {loading ? (
+        <ActivityIndicator size="large" color="blue" />
+      ) : location ? (
+        <View style={styles.mapContainer}>
+          <MapView
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            region={location}
+            onRegionChangeComplete={(newRegion) => setLocation(newRegion)}
+          >
+            <Marker coordinate={location} title="Your Shop Location" />
+            <Circle
+              center={location}
+              radius={radius}
+              strokeColor="blue"
+              fillColor="rgba(0, 0, 255, 0.3)"
+            />
+          </MapView> */}
+
+          {/* <View style={styles.radiusContainer}>
+            <Text style={styles.radiusText}>
+              Current Radius: {radius.toFixed(0)} meters
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.errorText}>Location not available.</Text>
+      )} */}
+
     <View style={styles.container}>
       {/* ✅ Shop Name */}
       <View style={styles.shopInfo}>
@@ -145,8 +175,9 @@ export default function VendorDashboard({ route }) {
             keyExtractor={(item) => item.day}
             renderItem={({ item }) => (
               <Text style={styles.timingText}>
-                {item.day}: {item.open.trim() || "Closed"} {item.close ? `- ${item.close.trim()}` : ""}
-              </Text>
+                 {`${item.day}: ${item.open.trim() || "Closed"} ${item.close ? `- ${item.close.trim()}` : ""}`}
+             </Text>
+
             )}
           />
         ) : (
@@ -154,28 +185,35 @@ export default function VendorDashboard({ route }) {
         )}
       </View>
 
+
+
       {/* ✅ Buttons */}
+      {/* <TouchableOpacity style={styles.button} onPress={getLocation}>
+        <Text style={styles.buttonText}>Refresh Location</Text>
+      </TouchableOpacity> */}
+
       <TouchableOpacity
         style={styles.button}
-        onPress={() => navigation.navigate("PendingOrder", { vendor_id })}
+        onPress={() => navigation.navigate("PendingOrder")}
       >
         <Text style={styles.buttonText}>Pending Orders</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={styles.button}
-        onPress={() => navigation.navigate("Orders", { vendor_id })}
+        onPress={() => navigation.navigate("Orders")}
       >
         <Text style={styles.buttonText}>Orders</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
+    </View>
 
-      {/* ✅ Bottom Navigation */}
-      <VendorNavigation vendor_id={vendor_id} />
+    <VendorNavigation vendor_id={vendor_id}/>
     </View>
   );
 }
 
-// ✅ **Styles**
+// ✅ Styles (same as before)
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -243,6 +281,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#fff",
   },
+  // container: { flex: 1, alignItems: "center", padding: 20 },
+  // header: { fontSize: 22, fontWeight: "bold", marginBottom: 10 },
+  mapContainer: { width: "100%", height: 250, borderRadius: 10, overflow: "hidden", marginBottom: 10 },
+  map: { width: "100%", height: "100%" },
+  radiusContainer: { marginTop: 10, alignItems: "center" },
+  radiusText: { fontSize: 16, fontWeight: "bold", color: "#333" },
+  // button: { backgroundColor: "#FF5733", padding: 14, borderRadius: 10, width: "80%", alignItems: "center", marginTop: 10 },
+  buttonText: { fontSize: 18, fontWeight: "bold", color: "#fff" },
+  errorBox: { backgroundColor: "red", padding: 10, borderRadius: 5, marginTop: 10 },
+  errorText: { color: "white", fontSize: 16, textAlign: "center" },
 });
 
 // export default VendorDashboard;
