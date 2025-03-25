@@ -21,13 +21,15 @@ const Login = () => {
     }
   
     try {
-      const response = await axios.post(`${API_BASE}/login`, {
+      console.log(`http://192.168.1.22:3000/api/v1/login`)
+      // const response = await axios.post(`${API_BASE}/login`, {
+        const response = await axios.post(`http://192.168.1.22:3000/api/v1/login`, {
         username,
         password,
         role: selectedOption, 
       });
   
-      console.log('Login Response:', response.data);
+      console.log('Login Response:', response);
       setPassword("");
       setUsername('');
       setSelectedOption(null);

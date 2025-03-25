@@ -138,6 +138,9 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+app.get('/', (req, res)=>{
+  res.json({data: "Data Goes Here."})
+})
 
 
 // API GET FOOD ITEM
@@ -222,6 +225,7 @@ app.post('/api/v1/set-data', (req, res) => {
 // Login ----------->>>>>
 
 app.post('/api/v1/login', (req, res) => {
+  console.log('here....')
   const { username, password, role } = req.body;
   console.log(username, password, role);
 

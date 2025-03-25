@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from "react";
-import {
-  View, Text,  TouchableOpacity,  Alert,  StyleSheet,  FlatList,  ActivityIndicator,
-  PermissionsAndroid,  Platform,} from "react-native";
+import { View, Text, TouchableOpacity, Alert, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import Geolocation from "react-native-geolocation-service";
-import { request, PERMISSIONS, RESULTS } from "react-native-permissions";
-import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps";
+// import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps";
 import API_BASE from "../config1";
 import VendorNavigation from "./VendorNavigation";
 export default function VendorDashboard({ route }) {
@@ -24,64 +20,12 @@ export default function VendorDashboard({ route }) {
   useEffect(() => {
     requestLocationPermission();
     fetchShopDetails();
+    fetchUserLocation();
   }, []);
 
-  // ✅ Request Location Permission
-  const requestLocationPermission = async () => {
-    try {
-      let result;
-      if (Platform.OS === "android") {
-        result = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-        );
-        if (result === PermissionsAndroid.RESULTS.GRANTED) {
-          // getLocation();
-        } else {
-          setErrorMessage("Permission Denied: Please allow location access.");
-        }
-      } else {
-        result = await request(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
-        if (result === RESULTS.GRANTED) {
-          // getLocation();
-        } else {
-          setErrorMessage("Permission Denied: Please allow location access.");
-        }
-      }
-    } catch (error) {
-      setErrorMessage(`Permission Error: ${error.message}`);
-    }
-  };
-
-  // ✅ Get Location Function
-  const getLocation = () => {
-    setLoading(true);
-    try {
-      Geolocation.getCurrentPosition(
-        (position) => {
-          if (!position || !position.coords) {
-            setErrorMessage("Location data is missing.");
-            return;
-          }
-          setLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          });
-          setLoading(false);
-        },
-        (error) => {
-          setErrorMessage(`Geolocation error: ${error.message}`);
-          setLoading(false);
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-      );
-    } catch (error) {
-      setErrorMessage(`Unexpected Error: ${error.message}`);
-      setLoading(false);
-    }
-  };
-
+  const fetchUserLocation = async ()=>{
+    console.log('fetchUserLocation');
+  }
   const fetchShopDetails = async () => {
     try {
       const response = await fetch(`${API_BASE}/vendor-details?vendor_id=${vendor_id}`);
@@ -114,20 +58,20 @@ export default function VendorDashboard({ route }) {
 
   return (
     <View style={styles.container}>
-      
+
       {/* ✅ Show Error on Screen */}
-      {/* {errorMessage && (
+      {errorMessage && (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{errorMessage}</Text>
         </View>
-      )} */}
+      )}
 
       {/* ✅ Show loading spinner until location is available */}
-      {/* {loading ? (
+      {loading ? (
         <ActivityIndicator size="large" color="blue" />
       ) : location ? (
         <View style={styles.mapContainer}>
-          <MapView
+          {/* <MapView
             provider={PROVIDER_GOOGLE}
             style={styles.map}
             region={location}
@@ -142,7 +86,7 @@ export default function VendorDashboard({ route }) {
             />
           </MapView> */}
 
-          {/* <View style={styles.radiusContainer}>
+          <View style={styles.radiusContainer}>
             <Text style={styles.radiusText}>
               Current Radius: {radius.toFixed(0)} meters
             </Text>
@@ -150,64 +94,64 @@ export default function VendorDashboard({ route }) {
         </View>
       ) : (
         <Text style={styles.errorText}>Location not available.</Text>
-      )} */}
+      )}
 
-    <View style={styles.container}>
-      {/* ✅ Shop Name */}
-      <View style={styles.shopInfo}>
-        <Text style={styles.shopName}>{shopName}</Text>
-      </View>
-      
-
-      {/* ✅ Shop Open/Closed Status */}
-      <View style={styles.shopStatusContainer}>
-        <Text style={[styles.shopStatus, isOnline ? styles.openText : styles.closedText]}>
-          {isOnline ? "Shop is Open" : "Shop is Closed"}
-        </Text>
-      </View>
-
-      {/* ✅ Display Opening & Closing Timings */}
-      <View style={styles.timingsContainer}>
-        <Text style={styles.timingsHeader}>Opening & Closing Timings:</Text>
-        {openCloseTimings.length > ""? (
-          <FlatList
-            data={openCloseTimings}
-            keyExtractor={(item) => item.day}
-            renderItem={({ item }) => (
-              <Text style={styles.timingText}>
-                 {`${item.day}: ${item.open.trim() || "Closed"} ${item.close ? `- ${item.close.trim()}` : ""}`}
-             </Text>
-
-            )}
-          />
-        ) : (
-          <Text style={styles.timingText}>No timings available</Text>
-        )}
-      </View>
+      <View style={styles.container}>
+        {/* ✅ Shop Name */}
+        <View style={styles.shopInfo}>
+          <Text style={styles.shopName}>{shopName}</Text>
+        </View>
 
 
+        {/* ✅ Shop Open/Closed Status */}
+        <View style={styles.shopStatusContainer}>
+          <Text style={[styles.shopStatus, isOnline ? styles.openText : styles.closedText]}>
+            {isOnline ? "Shop is Open" : "Shop is Closed"}
+          </Text>
+        </View>
 
-      {/* ✅ Buttons */}
-      {/* <TouchableOpacity style={styles.button} onPress={getLocation}>
+        {/* ✅ Display Opening & Closing Timings */}
+        <View style={styles.timingsContainer}>
+          <Text style={styles.timingsHeader}>Opening & Closing Timings:</Text>
+          {openCloseTimings.length > "" ? (
+            <FlatList
+              data={openCloseTimings}
+              keyExtractor={(item) => item.day}
+              renderItem={({ item }) => (
+                <Text style={styles.timingText}>
+                  {`${item.day}: ${item.open.trim() || "Closed"} ${item.close ? `- ${item.close.trim()}` : ""}`}
+                </Text>
+
+              )}
+            />
+          ) : (
+            <Text style={styles.timingText}>No timings available</Text>
+          )}
+        </View>
+
+
+
+        {/* ✅ Buttons */}
+        {/* <TouchableOpacity style={styles.button} onPress={getLocation}>
         <Text style={styles.buttonText}>Refresh Location</Text>
       </TouchableOpacity> */}
 
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => navigation.navigate("PendingOrder")}
-      >
-        <Text style={styles.buttonText}>Pending Orders</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => navigation.navigate("PendingOrder")}
+        >
+          <Text style={styles.buttonText}>Pending Orders</Text>
+        </TouchableOpacity>
 
-      {/* <TouchableOpacity
+        {/* <TouchableOpacity
         style={styles.button}
         onPress={() => navigation.navigate("Orders")}
       >
         <Text style={styles.buttonText}>Orders</Text>
       </TouchableOpacity> */}
-    </View>
+      </View>
 
-    <VendorNavigation vendor_id={vendor_id}/>
+      <VendorNavigation vendor_id={vendor_id} />
     </View>
   );
 }
