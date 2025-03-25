@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Alert, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import Geolocation from 'react-native-get-location'
 // import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps";
 import API_BASE from "../config1";
 import VendorNavigation from "./VendorNavigation";
@@ -18,13 +19,25 @@ export default function VendorDashboard({ route }) {
   const [errorMessage, setErrorMessage] = useState(null); // ✅ Shows error on screen
 
   useEffect(() => {
-    requestLocationPermission();
+    // requestLocationPermission();
     fetchShopDetails();
     fetchUserLocation();
   }, []);
 
-  const fetchUserLocation = async ()=>{
-    console.log('fetchUserLocation');
+  const fetchUserLocation = async () => {
+    console.log('stage-1', Geolocation.getCurrentPosition());
+    Geolocation.getCurrentPosition(
+      position => {
+        console.log(position);
+        setMLat(position.coords.latitude);
+        setMLong(position.coords.longitude);
+      },
+      error => {
+        // See error code charts below.
+        console.log(error.code, error.message);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+    );
   }
   const fetchShopDetails = async () => {
     try {

@@ -3,8 +3,8 @@ import { View, TextInput, Button, StyleSheet, Text, ScrollView, TouchableOpacity
 import axios from 'axios';
 import API_BASE from "../config1.js";
 import { useEffect, useState } from 'react';
-import { Geolocation } from 'react-native-geolocation-service';
-import { PermissionsAndroid, Platform } from 'react-native';
+// import { Geolocation } from 'react-native-geolocation-service';
+// import { PermissionsAndroid, Platform } from 'react-native';
 
 export default function VendorSignup({ navigation, route }) {
   const [Shop_name, setShopName] = useState('');
@@ -66,69 +66,69 @@ export default function VendorSignup({ navigation, route }) {
 
    // ✅ Fetch shop details
   // ✅ Live Location Tracking
-      useEffect(() => {
-        let watchId = null;
+      // useEffect(() => {
+      //   let watchId = null;
       
-        const requestLocationPermission = async () => {
-          try {
-            if (Platform.OS === 'android') {
-              const granted = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                {
-                  title: 'Location Permission',
-                  message: 'This app needs location access to track your shop location.',
-                  buttonNeutral: 'Ask Me Later',
-                  buttonNegative: 'Cancel',
-                  buttonPositive: 'OK',
-                }
-              );
+      //   const requestLocationPermission = async () => {
+      //     try {
+      //       if (Platform.OS === 'android') {
+      //         const granted = await PermissionsAndroid.request(
+      //           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      //           {
+      //             title: 'Location Permission',
+      //             message: 'This app needs location access to track your shop location.',
+      //             buttonNeutral: 'Ask Me Later',
+      //             buttonNegative: 'Cancel',
+      //             buttonPositive: 'OK',
+      //           }
+      //         );
       
-              if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-                console.log('Location permission denied');
-                return;
-              }
-            }
+      //         if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+      //           console.log('Location permission denied');
+      //           return;
+      //         }
+      //       }
       
-            // ✅ Get current location once (prevents crashes on startup)
-            Geolocation.getCurrentPosition(
-              (position) => {
-                setLiveLocation(position.coords);
-              },
-              (error) => {
-                console.error("Initial Location Error:", error.message);
-              },
-              { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-            );
+      //       // ✅ Get current location once (prevents crashes on startup)
+      //       Geolocation.getCurrentPosition(
+      //         (position) => {
+      //           setLiveLocation(position.coords);
+      //         },
+      //         (error) => {
+      //           console.error("Initial Location Error:", error.message);
+      //         },
+      //         { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      //       );
       
-            // ✅ Start watching the user's location continuously
-            watchId = Geolocation.watchPosition(
-              (position) => {
-                setLiveLocation(position.coords);
-              },
-              (error) => {
-                console.error("Live Location Error:", error.message);
-              },
-              {
-                enableHighAccuracy: true,
-                distanceFilter: 10, // Update only if moved 10 meters
-                interval: 10000, // Every 10 seconds
-                fastestInterval: 5000,
-              }
-            );
-          } catch (err) {
-            console.warn("Permission request error:", err);
-          }
-        };
+      //       // ✅ Start watching the user's location continuously
+      //       watchId = Geolocation.watchPosition(
+      //         (position) => {
+      //           setLiveLocation(position.coords);
+      //         },
+      //         (error) => {
+      //           console.error("Live Location Error:", error.message);
+      //         },
+      //         {
+      //           enableHighAccuracy: true,
+      //           distanceFilter: 10, // Update only if moved 10 meters
+      //           interval: 10000, // Every 10 seconds
+      //           fastestInterval: 5000,
+      //         }
+      //       );
+      //     } catch (err) {
+      //       console.warn("Permission request error:", err);
+      //     }
+      //   };
       
-        requestLocationPermission();
+      //   requestLocationPermission();
       
-        // ✅ Cleanup to prevent crashes when component unmounts
-        return () => {
-          if (watchId !== null) {
-            Geolocation.clearWatch(watchId);
-          }
-        };
-      }, []);
+      //   // ✅ Cleanup to prevent crashes when component unmounts
+      //   return () => {
+      //     if (watchId !== null) {
+      //       Geolocation.clearWatch(watchId);
+      //     }
+      //   };
+      // }, []);
 
   return (
     <ScrollView style={styles.container}>
