@@ -17,15 +17,22 @@ const FoodList = ({ route }) => {
 
   const fetchFood = async () => {
     try {
-      console.log("food",customer_id);
+      console.log("food", customer_id);
       
       const response = await axios.get(`${API_BASE}/food`, { params: { vendor_id } });
-      setFoodItems(response.data || []);
-      console.log(response.data);
+      
+      // Filter out unavailable foods
+      console.log("food ",response.data);
+      
+      const availableFood = response.data.filter(food => food.is_available);
+      
+      setFoodItems(availableFood || []);
+      console.log(availableFood);
     } catch (error) {
       Alert.alert("Error", "Could not fetch menu items");
     }
   };
+  
   
   // Ensure useFocusEffect correctly reloads data
   useFocusEffect(

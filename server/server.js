@@ -1330,12 +1330,13 @@ app.put("/api/v1/customer/:id", (req, res) => {
 //  food
 
 // Fetch all food items for a vendor
-app.post("/api/v1/toggle-food", (req, res) => {
-  const { foodId, isAvailable } = req.body;
- console.log(foodId,isAvailable);
+app.put("/api/v1/toggle-food/:food_id", (req, res) => {
+  const { food_id } = req.params; // Get food_id from URL
+  const { is_available } = req.body; // Get new status from request body
+ console.log("j",food_id,is_available);
  
   const query = "UPDATE food SET is_available = ? WHERE food_id = ?";
-  db.query(query, [isAvailable, foodId], (err, result) => {
+  db.query(query, [is_available, food_id], (err, result) => {
     if (err) {
       console.error("Error updating food status:", err);
       return res.status(500).json({ message: "Internal Server Error" });
@@ -1344,11 +1345,13 @@ app.post("/api/v1/toggle-food", (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Food item not found" });
     }
-     console.log("h",result);
-     
+
     res.json({ message: "Food availability updated successfully" });
   });
 });
+
+
+
 //fetch the opening timeings 
 app.get('/api/v1/vendor-details', (req, res) => {
   const { vendor_id } = req.query;

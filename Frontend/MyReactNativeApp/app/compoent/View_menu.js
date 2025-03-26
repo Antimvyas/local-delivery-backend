@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, Image, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, Switch } from 'react-native';
+import { View, Text, FlatList, Image, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, Switch, LogBox } from 'react-native';
 import axios from 'axios';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import BASE_URL from "../config.js";
@@ -33,7 +33,31 @@ const ViewMenu = ({ route }) => {
     } finally {
       setLoading(false);
     }
+
   };
+
+ const toggleAvailability = async (food_id, currentStatus) => {
+  try {
+    const newStatus = !currentStatus;
+    console.log("st", food_id, newStatus);
+
+    // ✅ Use PUT instead of POST and pass food_id in the URL
+    await axios.post(`${API_BASE}/toggle-food/${food_id}`, { is_available: newStatus });
+
+    // ✅ Update local state
+    setFoodItems(prevItems =>
+      prevItems.map(item =>
+        item.food_id === food_id ? { ...item, is_available: newStatus } : item
+      )
+    );
+  } catch (error) {
+    console.error("Error updating availability:", error);
+    Alert.alert("Error", "Failed to update availability.");
+  }
+};
+
+  
+
 
   useFocusEffect(
     useCallback(() => {
@@ -65,9 +89,13 @@ const ViewMenu = ({ route }) => {
                 <Text style={styles.foodName}>{item.food_type}</Text>
                 <Text style={styles.foodName}>{item.food_description}</Text>
 
-                <View style={styles.toggle}>
-                  <Switch value={item.is_available} />
-                </View>
+                <Switch
+                  value={item.is_available} style={styles.toggle}
+                  onValueChange={() => toggleAvailability(item.food_id, item.is_available)}
+                  trackColor={{ false: "red", true: "green" }}
+                  thumbColor="#fff"
+                />
+
 
                 <View style={styles.iconContainer}>
                   <TouchableOpacity onPress={() => navigation.navigate('EditFood', { foodItem: item })} style={styles.button}>
@@ -85,8 +113,8 @@ const ViewMenu = ({ route }) => {
 
       {/* ✅ Keep Menu & VendorNavigation Fixed at Bottom */}
       <View style={styles.bottomContainer}>
-        <Menu vendor_id={vendor_id}  />
-          <Text></Text>
+        <Menu vendor_id={vendor_id} />
+        <Text></Text>
         <VendorNavigation vendor_id={vendor_id} />
       </View>
     </View>
