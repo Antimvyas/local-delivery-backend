@@ -2,7 +2,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const db=require("./dbs.js");
+const db = require("./dbs.js");
 const path = require('path');
 const multer = require('multer');  // ✅ Add this line to import multer
 const fs = require('fs');
@@ -16,9 +16,9 @@ const { close } = require('inspector/promises');
 
 const app = express();
 app.use(express.json());
-app.use(cors({ }));
+app.use(cors({}));
 const server = http.createServer(app);
-const io     = socketIo(server, {
+const io = socketIo(server, {
   cors: {
     origin: "*", // Adjust for production
   }
@@ -84,7 +84,7 @@ io.on("connection", (socket) => {
   // ✅ Vendor Accepts Order
   socket.on("acceptOrder", (data) => {
     console.log("✅ Order Accepted:", data);
-
+       
     db.query("UPDATE orders SET order_status = 'accepted' WHERE order_id = ?", [
       data.order_id
     ]);
@@ -121,7 +121,7 @@ io.on("connection", (socket) => {
 
 
 // for IMAGE STORE
-app.use(express.urlencoded({ extended: true })); 
+app.use(express.urlencoded({ extended: true }));
 app.use('/image', express.static(path.join(__dirname, 'image')));
 const uploadDir = path.join(__dirname, 'image');
 if (!fs.existsSync(uploadDir)) {
@@ -138,20 +138,20 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-app.get('/', (req, res)=>{
-  res.json({data: "Data Goes Here."})
+app.get('/', (req, res) => {
+  res.json({ data: "Data Goes Here." })
 })
 
 
 // API GET FOOD ITEM
 app.get('/api/v1/food', (req, res) => {
   const vendor_id = req.query.vendor_id; // ✅ FIXED: Extract vendor_id safely
-    console.log("id",vendor_id);
-    
+  console.log("id", vendor_id);
+
   if (!vendor_id) {
     return res.status(400).json({ error: 'Missing vendor_id parameter' });
   }
-   const sql = `SELECT food_id,food_name,cost,food_img ,food_type,food_description,is_available from food where vendor_id=?`;
+  const sql = `SELECT food_id,food_name,cost,food_img ,food_type,food_description,is_available from food where vendor_id=?`;
   db.query(sql, [vendor_id], (err, results) => {
     if (err) {
       console.error('Error fetching data:', err);
@@ -212,7 +212,7 @@ app.post('/api/v1/set-data', (req, res) => {
       res.json({
         message: "User added successfully",
         username: username,
-        customer_id: result.insertId  
+        customer_id: result.insertId
       });
     });
   });
@@ -312,52 +312,52 @@ app.post('/api/v1/add-vendor', (req, res) => {
 
 // add-food
 app.post('/api/v1/food-set', upload.single('food_img'), (req, res) => {
-  const { food_name, cost ,food_type,food_description,vendor_id} = req.body;
+  const { food_name, cost, food_type, food_description, vendor_id } = req.body;
   const food_img = req.file ? `${req.file.filename}` : null; // ✅ Store image path
   if (!food_name || !cost || !food_img) {
     return res.status(400).json({ message: 'All fields are required' });
   }
-  
+
   const sql = `INSERT INTO food (food_name, cost, food_img, food_type,food_description,vendor_id) VALUES ('${food_name}', ${cost},'${food_img}','${food_type}','${food_description}',${vendor_id})`;
   db.query(sql, (err, result) => {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).json({ message: 'Database error' });
     }
-    
-   res.json({ message: 'Food item added successfully!', food_id: result.insertId });
+
+    res.json({ message: 'Food item added successfully!', food_id: result.insertId });
   });
 });
 
 // EDIT FOOD---->>>>>
-app.post('/api/v1/food-update',upload.single('food_img'),(req,res)=>{
-  const { food_id, food_name, cost,food_type,food_description, } = req.body;
+app.post('/api/v1/food-update', upload.single('food_img'), (req, res) => {
+  const { food_id, food_name, cost, food_type, food_description, } = req.body;
   const food_img = req.file ? `${req.file.filename}` : null;
-   if (!food_id || !food_name || !cost ||!food_img) {
-        return res.status(400).json({ message: "Missing required fields" });
+  if (!food_id || !food_name || !cost || !food_img) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  const sql = "UPDATE food SET food_name = ?, cost = ?, food_img = ? food_type=?,food_description=?, WHERE food_id = ?";
+  const values = [food_name, cost, food_img, food_id, food_type, food_description,];
+
+  db.query(sql, values, (err, result) => {
+    if (err) {
+      console.error("Update Error:", err);
+      return res.status(500).json({ message: "Database update failed" });
     }
 
-    const sql = "UPDATE food SET food_name = ?, cost = ?, food_img = ? food_type=?,food_description=?, WHERE food_id = ?";
-    const values = [food_name, cost, food_img, food_id,food_type,food_description,];
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Food item not found" });
+    }
 
-    db.query(sql, values, (err, result) => {
-        if (err) {
-            console.error("Update Error:", err);
-            return res.status(500).json({ message: "Database update failed" });
-        }
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Food item not found" });
-        }
-
-        res.json({ message: "Food item updated successfully!" });
-    });
+    res.json({ message: "Food item updated successfully!" });
+  });
 })
 
 
 
 // Delete Food---->>>>
-app.use('/api/v1/food-delete',(req,res)=>{
+app.use('/api/v1/food-delete', (req, res) => {
   const { food_id, food_img } = req.body;
 
   if (!food_id || !food_img) {
@@ -366,7 +366,7 @@ app.use('/api/v1/food-delete',(req,res)=>{
 
   // Delete food item from database
   const sql = "DELETE FROM food WHERE food_id = ?";
-  
+
   db.query(sql, [food_id], (err, result) => {
     if (err) {
       console.error("Delete Error:", err);
@@ -418,7 +418,7 @@ app.get('/api/v1/vendors', (req, res) => {
 app.post('/api/v1/orders', (req, res) => {
   const { customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, items } = req.body;
 
-  if (!customer_id || !vendor_id || !total_cost || !customers_location || !customers_contact || !payment_methods || !items || items.length === 0 ) {
+  if (!customer_id || !vendor_id || !total_cost || !customers_location || !customers_contact || !payment_methods || !items || items.length === 0) {
     return res.status(400).json({ error: 'All fields are required, and items cannot be empty' });
   }
 
@@ -430,7 +430,7 @@ app.post('/api/v1/orders', (req, res) => {
 
     // ✅ Step 1: Get Customer Name from Customers Table
     const customerQuery = `SELECT Name FROM customers WHERE customer_id = ?`;
-    
+
     db.query(customerQuery, [customer_id], (customerErr, customerResult) => {
       if (customerErr) {
         console.error('Error fetching customer name:', customerErr);
@@ -510,7 +510,7 @@ app.post('/api/v1/orders', (req, res) => {
 
           return [
             vendor_id,
-            customer_id,         
+            customer_id,
             order_id,
             customerName, // ✅ Pass fetched customer name here
             item.food_name,
@@ -616,7 +616,7 @@ app.get("/api/v1/vendor/orders", (req, res) => {
 
 // 📌 Accept Order
 // app.put("/api/v1/vendor/orders/accept", (req, res) => {
-//   const { order_id, vendor_id } = req.body;
+//   const { order_id, vendor_id } = req.body;e
 //   if (!order_id || !vendor_id) return res.status(400).json({ error: "Order ID and Vendor ID are required" });
 
 //   const query = `UPDATE orders SET order_status = 'accepted' WHERE order_id = ? AND vendor_id = ?`;
@@ -647,15 +647,15 @@ app.get("/api/v1/vendor/orders", (req, res) => {
 // for fetch orders for customer
 app.get('/api/v1/customer/orders', async (req, res) => {
   try {
-      const customer_id = req.query.customer_id;
-      console.log("Received customer_id:", customer_id);
+    const customer_id = req.query.customer_id;
+    console.log("Received customer_id:", customer_id);
 
-      if (!customer_id) {
-          return res.status(400).json({ error: "Customer ID is required" });
-      }
+    if (!customer_id) {
+      return res.status(400).json({ error: "Customer ID is required" });
+    }
 
-      // Corrected SQL Query
-      const query = `
+    // Corrected SQL Query
+    const query = `
           SELECT 
               o.order_id, o.customer_id, o.vendor_id, 
               oi.food_name, oi.quantity, 
@@ -668,17 +668,17 @@ app.get('/api/v1/customer/orders', async (req, res) => {
           WHERE o.customer_id = ?;
       `;
 
-      db.query(query, [customer_id], (err, results) => {
-          if (err) {
-              console.error("Error fetching orders:", err);
-              return res.status(500).json({ error: "Internal Server Error" });
-          }
-          res.json(results);
-      });
+    db.query(query, [customer_id], (err, results) => {
+      if (err) {
+        console.error("Error fetching orders:", err);
+        return res.status(500).json({ error: "Internal Server Error" });
+      }
+      res.json(results);
+    });
 
   } catch (error) {
-      console.error("Error in order fetching:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error in order fetching:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -768,7 +768,7 @@ app.post("/api/v1/request-udar", (req, res) => {
 
     // ✅ Step 2: Fetch Customer Name
     const queryCustomer = "SELECT Name FROM customers WHERE customer_id = ?";
-    
+
     db.query(queryCustomer, [customer_id], (err, result) => {
       if (err) {
         console.error("❌ Error fetching customer name:", err);
@@ -784,7 +784,7 @@ app.post("/api/v1/request-udar", (req, res) => {
 
       // ✅ Step 3: Insert Udar Request (Now with `pending` status)
       const queryInsert = "INSERT INTO udar_requests (customer_id, vendor_id, customer_name, status) VALUES (?, ?, ?, 'pending')";
-      
+
       db.query(queryInsert, [customer_id, vendor_id, customer_name], (err, result) => {
         if (err) {
           console.error("❌ Error inserting Udar request:", err);
@@ -799,7 +799,7 @@ app.post("/api/v1/request-udar", (req, res) => {
 });
 
 
- 
+
 
 // ✅ Vendor Accepts Udar Request
 app.post("/api/v1/accept-udar", (req, res) => {
@@ -853,47 +853,47 @@ app.get("/api/v1/customer-transactions/:customer_id", (req, res) => {
   `;
 
   db.query(query, [customer_id], (err, results) => {
-      if (err) {
-          console.error("❌ Database Error:", err);
-          return res.status(500).json({ error: "Internal Server Error" });
-      }
+    if (err) {
+      console.error("❌ Database Error:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
 
-      if (results.length === 0) {
-          return res.status(404).json({ message: "No transactions found for this customer" });
-      }
+    if (results.length === 0) {
+      return res.status(404).json({ message: "No transactions found for this customer" });
+    }
 
-      // ✅ Filter out transactions where order_id is NULL
-      const validTransactions = results.filter(transaction => transaction.order_id !== null);
+    // ✅ Filter out transactions where order_id is NULL
+    const validTransactions = results.filter(transaction => transaction.order_id !== null);
 
-      if (validTransactions.length === 0) {
-          return res.status(404).json({ message: "No valid transactions found for this customer" });
-      }
+    if (validTransactions.length === 0) {
+      return res.status(404).json({ message: "No valid transactions found for this customer" });
+    }
 
-      // ✅ Calculate total amounts safely
-      const totalSummary = validTransactions.reduce(
-          (acc, item) => {
-              console.log("🔹 Processing item:", item); // ✅ Debugging log
-              
-              acc.total_cost += item.total_cost || 0;
-              acc.total_credit += item.debit_customer || 0;
-              acc.total_debit += item.credit_customer || 0;
-              acc.total_balance_due += item.balance_due || 0;
-              return acc;
-          },
-          { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
-      );
+    // ✅ Calculate total amounts safely
+    const totalSummary = validTransactions.reduce(
+      (acc, item) => {
+        console.log("🔹 Processing item:", item); // ✅ Debugging log
 
-      console.log('✅ Response Data:', { 
-          customer_name: validTransactions[0].customer_name, 
-          transactions: validTransactions, 
-          totalSummary 
-      });
+        acc.total_cost += item.total_cost || 0;
+        acc.total_credit += item.debit_customer || 0;
+        acc.total_debit += item.credit_customer || 0;
+        acc.total_balance_due += item.balance_due || 0;
+        return acc;
+      },
+      { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
+    );
 
-      res.json({
-          customer_name: validTransactions[0].customer_name,
-          transactions: validTransactions,
-          totalSummary
-      });
+    console.log('✅ Response Data:', {
+      customer_name: validTransactions[0].customer_name,
+      transactions: validTransactions,
+      totalSummary
+    });
+
+    res.json({
+      customer_name: validTransactions[0].customer_name,
+      transactions: validTransactions,
+      totalSummary
+    });
   });
 });
 
@@ -927,7 +927,7 @@ app.get("/api/v1/check-udar", (req, res) => {
     const isApproved = result[0].count > 0;
 
     console.log("Udar approval status:", isApproved);
-    
+
     res.json({ isApproved });
   });
 });
@@ -950,10 +950,10 @@ app.get("/api/v1/customer-udar-accounts/:customer_id", (req, res) => {
       console.error("❌ Database Error:", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
-  
+
     res.json(results); // ✅ Returns list of vendor_ids where customer already has an account
     console.log(results);
-    
+
   });
 });
 
@@ -962,7 +962,7 @@ app.get("/api/v1/customer-udar-accounts/:customer_id", (req, res) => {
 // ✅ Fetch Udar Requests for Vendor
 app.get("/api/v1/udar-requests/:vendor_id", (req, res) => {
   const { vendor_id } = req.params;
-  
+
   const query = `
       SELECT ur.request_id, c.Name 
       FROM udar_requests ur 
@@ -972,16 +972,16 @@ app.get("/api/v1/udar-requests/:vendor_id", (req, res) => {
   `;
 
   db.query(query, [vendor_id], (err, results) => {
-      if (err) {
-          console.error("Database error:", err);  // Logs the error for debugging
-          return res.status(500).json({ error: "Internal Server Error" }); // Sends error response
-      }
+    if (err) {
+      console.error("Database error:", err);  // Logs the error for debugging
+      return res.status(500).json({ error: "Internal Server Error" }); // Sends error response
+    }
 
-      if (results.length === 0) {
-          return res.status(404).json({ message: "No pending requests found" }); // Handle empty result set
-      }
+    if (results.length === 0) {
+      return res.status(404).json({ message: "No pending requests found" }); // Handle empty result set
+    }
 
-      res.json(results); // Sends the customer names and request IDs to frontend
+    res.json(results); // Sends the customer names and request IDs to frontend
   });
 });
 
@@ -990,7 +990,7 @@ app.get("/api/v1/udar-requests/:vendor_id", (req, res) => {
 app.get("/api/v1/vendor-dashboard/:vendor_id", (req, res) => {
   const { vendor_id } = req.params;
   console.log(vendor_id);
-  
+
   const query = `
       SELECT 
           c.customer_id,
@@ -1005,16 +1005,16 @@ app.get("/api/v1/vendor-dashboard/:vendor_id", (req, res) => {
   `;
 
   db.query(query, [vendor_id], (err, results) => {
-      if (err) {
-          console.error("❌ Database Error:", err);  // ✅ Log full SQL error
-          return res.status(500).json({ error: "Internal Server Error", details: err.message });
-      }
+    if (err) {
+      console.error("❌ Database Error:", err);  // ✅ Log full SQL error
+      return res.status(500).json({ error: "Internal Server Error", details: err.message });
+    }
 
-      if (results.length === 0) {
-          return res.status(404).json({ message: "No records found" });
-      }
+    if (results.length === 0) {
+      return res.status(404).json({ message: "No records found" });
+    }
 
-      res.json(results);
+    res.json(results);
   });
 });
 
@@ -1043,59 +1043,59 @@ app.get("/api/v1/customer/udar/:customer_id", (req, res) => {
 
 
   db.query(query, [customer_id], (err, results) => {
-      if (err) {
-          console.error("❌ Database Error:", err);
-          return res.status(500).json({ error: "Internal Server Error" });
-      }
+    if (err) {
+      console.error("❌ Database Error:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
 
-      if (results.length === 0) {
-          return res.status(404).json({ message: "No transactions found for this customer" });
-      }
+    if (results.length === 0) {
+      return res.status(404).json({ message: "No transactions found for this customer" });
+    }
 
-      // ✅ Filter out transactions where order_id is NULL
-      const validTransactions = results.filter(transaction => transaction.order_id !== null);
+    // ✅ Filter out transactions where order_id is NULL
+    const validTransactions = results.filter(transaction => transaction.order_id !== null);
 
-      if (validTransactions.length === 0) {
-          return res.status(404).json({ message: "No valid transactions found for this customer" });
-      }
- console.log(results);
- 
-      // ✅ Calculate total amounts safely
-      const totalSummary = validTransactions.reduce(
-          (acc, item) => {
-              console.log("🔹 Processing item:", item); // ✅ Debugging log
-              
-              acc.total_cost += item.total_cost || 0;
-              acc.total_credit += item.debit_value_vendor || 0;
-              acc.total_debit += item.credit_value_vendor || 0;
-              acc.total_balance_due += item.balance_due || 0;
-              return acc;
-          },
-          { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
-      );
+    if (validTransactions.length === 0) {
+      return res.status(404).json({ message: "No valid transactions found for this customer" });
+    }
+    console.log(results);
 
-      console.log('✅ Response Data:', { 
-        // vendor_id:validTransactions[0].vendor_id,
-          Shop_name: validTransactions[0].Shop_name, 
-          transactions: validTransactions, 
-          totalSummary ,
-         
+    // ✅ Calculate total amounts safely
+    const totalSummary = validTransactions.reduce(
+      (acc, item) => {
+        console.log("🔹 Processing item:", item); // ✅ Debugging log
 
-      });
+        acc.total_cost += item.total_cost || 0;
+        acc.total_credit += item.debit_value_vendor || 0;
+        acc.total_debit += item.credit_value_vendor || 0;
+        acc.total_balance_due += item.balance_due || 0;
+        return acc;
+      },
+      { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
+    );
 
-      res.json({
-          vendor_id:validTransactions[0].vendor_id,
-          Shop_name: validTransactions[0].Shop_name,
-          transactions: validTransactions,
-          totalSummary
-      });
+    console.log('✅ Response Data:', {
+      // vendor_id:validTransactions[0].vendor_id,
+      Shop_name: validTransactions[0].Shop_name,
+      transactions: validTransactions,
+      totalSummary,
+
+
+    });
+
+    res.json({
+      vendor_id: validTransactions[0].vendor_id,
+      Shop_name: validTransactions[0].Shop_name,
+      transactions: validTransactions,
+      totalSummary
+    });
   });
 });
 
 // ✅ Clear Bill (Customer Pays)
 app.post("/api/v1/request-payment", (req, res) => {
   const { customer_id, vendor_id, amount } = req.body;
-console.log(customer_id, vendor_id, amount );
+  console.log(customer_id, vendor_id, amount);
 
   // Insert request into a payment requests table (for the popup)
   const insertQuery = `
@@ -1206,17 +1206,17 @@ app.get("/api/v1/udar/vendors/:customer_id", (req, res) => {
 // <<<<<<<<fetch payment request
 app.get("/api/v1/payment-requests/:customer_id", (req, res) => {
   const { customer_id } = req.params;
-   console.log(customer_id);
-   
+  console.log(customer_id);
+
   if (!customer_id) {
     console.error("❌ Missing customer_id in request");
     return res.status(400).json({ success: false, message: "Customer ID is required" });
   }
 
   console.log("Received customer_id:", customer_id);
-  
+
   const sql = "SELECT * FROM payment_requests WHERE customer_id = ? AND status = 'pending' ORDER BY request_time DESC";
-  
+
   db.query(sql, [customer_id], (err, result) => {
     if (err) {
       console.error("❌ Error fetching payment requests:", err);
@@ -1233,8 +1233,8 @@ app.get("/api/v1/payment-requests/:customer_id", (req, res) => {
 app.post("/api/v1/receive-payment", (req, res) => {
   console.log("Received Payment Request:", req.body);
   const { customer_id, amount_received } = req.body;
- console.log("log id ",customer_id,amount_received);
- 
+  console.log("log id ", customer_id, amount_received);
+
   if (!customer_id || !amount_received) {
     return res.status(400).json({ success: false, message: "Missing customer_id or amount_received" });
   }
@@ -1272,7 +1272,7 @@ app.post("/api/v1/receive-payment", (req, res) => {
         return res.status(500).json({ success: false, message: "Failed to update payment request" });
       }
 
-    //   // Step 3: Insert a transaction record for the vendor
+      //   // Step 3: Insert a transaction record for the vendor
       const insertVendorTransactionSQL = `
         INSERT INTO vendor_transaction (customer_id, amount, transaction_type)
         VALUES (?, ?, 'credit')
@@ -1330,11 +1330,11 @@ app.put("/api/v1/customer/:id", (req, res) => {
 //  food
 
 // Fetch all food items for a vendor
-app.put("/api/v1/toggle-food/:food_id", (req, res) => {
+app.post("/api/v1/toggle-food/:food_id", (req, res) => {
   const { food_id } = req.params; // Get food_id from URL
-  const { is_available } = req.body; // Get new status from request body
- console.log("j",food_id,is_available);
- 
+  const { is_available } = req.body; // Get new status from request bodycd.
+  console.log("j", food_id, is_available);
+
   const query = "UPDATE food SET is_available = ? WHERE food_id = ?";
   db.query(query, [is_available, food_id], (err, result) => {
     if (err) {
@@ -1381,7 +1381,7 @@ app.get('/api/v1/vendor-details', (req, res) => {
 app.get("/api/v1/vendor-timings/:vendorId", (req, res) => {
   const { vendorId } = req.params;
   console.log(vendorId);
-  
+
   const query = `SELECT open_close_timings, is_online FROM vendor WHERE vendor_id = ?`;
 
   db.query(query, [vendorId], (err, result) => {
@@ -1389,8 +1389,8 @@ app.get("/api/v1/vendor-timings/:vendorId", (req, res) => {
 
     if (result.length > 0) {
       res.json(result[0]);
-      console.log("r",result);
-      
+      console.log("r", result);
+
     } else {
       res.status(404).json({ error: "Vendor not found" });
     }
@@ -1403,18 +1403,18 @@ app.get("/api/v1/vendor-timings/:vendorId", (req, res) => {
 app.post("/api/v1/update-shop-timings/:vendorId", (req, res) => {
   const { vendorId } = req.params;
   const { open_close_timings } = req.body;
- console.log("t",open_close_timings);
- 
+  console.log("t", open_close_timings);
+
   let timeings
-  try{
-    timeings=JSON.stringify(open_close_timings)
-  }catch(err){
+  try {
+    timeings = JSON.stringify(open_close_timings)
+  } catch (err) {
     console.log("error");
-    
+
   }
   const query = `UPDATE vendor SET open_close_timings = ? WHERE vendor_id = ?`;
-   console.log("T",timeings);
-   
+  console.log("T", timeings);
+
   db.query(query, [timeings, vendorId], (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
 
@@ -1446,6 +1446,6 @@ app.post("/api/v1/update-shop-online-status/:vendorId", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    
+  console.log(`Server running on port ${PORT}`);
+
 });

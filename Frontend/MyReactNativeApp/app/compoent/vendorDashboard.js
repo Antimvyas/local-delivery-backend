@@ -14,7 +14,8 @@ export default function VendorDashboard({ route }) {
   const [shopName, setShopName] = useState('');
   const [openCloseTimings, setOpenCloseTimings] = useState([]);
   const [isOnline, setIsOnline] = useState(false);
-
+  console.log("id2",vendor_id);
+  
 
   const [errorMessage, setErrorMessage] = useState(null); // ✅ Shows error on screen
 
@@ -151,7 +152,7 @@ export default function VendorDashboard({ route }) {
 
         <TouchableOpacity
           style={styles.button}
-          onPress={() => navigation.navigate("PendingOrder")}
+          onPress={() => navigation.navigate("PendingOrder",{vendor_id:vendor_id})}
         >
           <Text style={styles.buttonText}>Pending Orders</Text>
         </TouchableOpacity>

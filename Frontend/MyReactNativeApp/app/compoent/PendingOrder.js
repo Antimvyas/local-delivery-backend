@@ -37,6 +37,10 @@ const PendingOrder = ({ navigation, route }) => {
       console.log("🔔 New Order Received:", data);
       playNotificationSound();
       await AsyncStorage.setItem("newOrder", JSON.stringify(data)); 
+      // console.log("datta",await AsyncStorage.setItem("newOrder", JSON.stringify(data)) );
+      
+      console.log("l",data);
+      
       setNewOrder(data);
       setIsModalVisible(true);
       
@@ -97,6 +101,8 @@ const PendingOrder = ({ navigation, route }) => {
     try {
       const response = await axios.get(`${API_BASE}/vendor/orders`, { params: { vendor_id } });
       setOrders(response.data);
+      console.log("da",setOrders(response.data));
+      
       setLoading(false);
     } catch (error) {
       console.error("Error fetching orders:", error);
@@ -125,15 +131,24 @@ const PendingOrder = ({ navigation, route }) => {
   };
 
   const handleAcceptOrder = async () => {
-    if (!newOrder) return;
-    
-    socket.emit("acceptOrder", { order_id: newOrder.order_id, customer_id: newOrder.customer_id });
+    if (!newOrder || !newOrder.order_id) {
+      console.log("❌ Error: Missing order_id");
+      return;
+    }
+  
+    socket.emit("acceptOrder", { 
+      order_id: newOrder.order_id, 
+      customer_id: newOrder.customer_id,
+      vendor_id: vendor_id // Ensure vendor_id is sent
+    });
+  
     Alert.alert("Order Accepted", "You have accepted the order.");
     stopNotificationSound();
     setIsModalVisible(false);
     await AsyncStorage.removeItem("newOrder");
     fetchOrders();
   };
+  
 
   const handleRejectOrder = async () => {
     if (!newOrder) return;
@@ -145,7 +160,8 @@ const PendingOrder = ({ navigation, route }) => {
     await AsyncStorage.removeItem("newOrder");
     fetchOrders();
   };
-
+  console.log("f",orders);
+  
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Pending Orders</Text>

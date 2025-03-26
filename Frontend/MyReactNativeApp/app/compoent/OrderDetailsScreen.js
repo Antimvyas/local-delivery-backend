@@ -108,7 +108,7 @@ const OrderDetailsScreen = ({ route, navigation }) => {
     try {
       await axios.post(`${API_BASE}/orders`, orderData);
       Alert.alert("Order Placed", "Your order has been successfully submitted!");
-
+      
       socket.emit("placeOrder", orderData);
       await AsyncStorage.removeItem("cart");
       navigation.navigate("CustomerDashboard", { customer_id });
