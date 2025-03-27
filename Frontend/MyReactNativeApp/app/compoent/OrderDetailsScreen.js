@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { 
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Modal, Animated 
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Modal, Animated
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import socket from "../socket"; 
+import socket from "../socket";
 import API_BASE from "../config1.js";
 
 const OrderDetailsScreen = ({ route, navigation }) => {
@@ -108,7 +108,7 @@ const OrderDetailsScreen = ({ route, navigation }) => {
     try {
       await axios.post(`${API_BASE}/orders`, orderData);
       Alert.alert("Order Placed", "Your order has been successfully submitted!");
-      
+
       socket.emit("placeOrder", orderData);
       await AsyncStorage.removeItem("cart");
       navigation.navigate("CustomerDashboard", { customer_id });
@@ -159,18 +159,18 @@ const OrderDetailsScreen = ({ route, navigation }) => {
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
             <View style={styles.modalView}>
               <Text style={styles.modalTitle}>{modalType === "address" ? "Edit Address" : "Edit Contact"}</Text>
-              
+
               {modalType === "address" ? (
                 <>
                   <Text>Previous Address:</Text>
                   <Text style={styles.customerDetails}>{customerAddress}</Text>
                   <TextInput placeholder="City" style={styles.input} onChangeText={(text) => setNewAddress({ ...newAddress, city: text })} />
                   <TextInput placeholder="Building Number" style={styles.input} onChangeText={(text) => setNewAddress({ ...newAddress, building: text })} />
-                  
+
                 </>
               ) : (
-                 
-                <TextInput placeholder="New Contact Number" style={styles.input} onChangeText={setNewContact} maxLength={10} keyboardType="numeric"/>
+
+                <TextInput placeholder="New Contact Number" style={styles.input} onChangeText={setNewContact} maxLength={10} keyboardType="numeric" />
               )}
 
               <TouchableOpacity onPress={saveNewDetails} style={styles.saveButton}>
@@ -185,123 +185,123 @@ const OrderDetailsScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    padding: 20, 
-    backgroundColor: "#fff" 
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: "#fff"
   },
 
-  row: { 
-    flexDirection: "row", 
-    justifyContent: "space-between", 
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 10
   },
 
-  label: { 
-    fontSize: 16, 
-    fontWeight: "bold", 
-    color: "#333" 
+  label: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333"
   },
 
-  editIcon: { 
-    fontSize: 18, 
-    color: "#007bff", 
-    fontWeight: "bold" 
+  editIcon: {
+    fontSize: 18,
+    color: "#007bff",
+    fontWeight: "bold"
   },
 
-  customerDetails: { 
-    fontSize: 16, 
-    color: "#555", 
-    marginBottom: 10, 
-    padding: 10, 
-    backgroundColor: "#f8f8f8", 
-    borderRadius: 5 
+  customerDetails: {
+    fontSize: 16,
+    color: "#555",
+    marginBottom: 10,
+    padding: 10,
+    backgroundColor: "#f8f8f8",
+    borderRadius: 5
   },
 
-  buttonContainer: { 
-    flexDirection: "row", 
-    justifyContent: "space-between", 
-    marginVertical: 15 
+  buttonContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginVertical: 15
   },
 
-  paymentButton: { 
-    padding: 15, 
-    borderRadius: 5, 
-    backgroundColor: "#ccc", 
-    flex: 1, 
-    alignItems: "center", 
-    marginHorizontal: 5 
+  paymentButton: {
+    padding: 15,
+    borderRadius: 5,
+    backgroundColor: "#ccc",
+    flex: 1,
+    alignItems: "center",
+    marginHorizontal: 5
   },
 
-  selectedPayment: { 
-    backgroundColor: "#28A745" 
+  selectedPayment: {
+    backgroundColor: "#28A745"
   },
 
-  buttonText: { 
-    fontSize: 16, 
-    fontWeight: "bold", 
-    color: "#fff" 
+  buttonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff"
   },
 
-  submitButton: { 
-    backgroundColor: "#28a745", 
-    padding: 12, 
-    borderRadius: 5, 
-    alignItems: "center", 
-    marginTop: 20 
+  submitButton: {
+    backgroundColor: "#28a745",
+    padding: 12,
+    borderRadius: 5,
+    alignItems: "center",
+    marginTop: 20
   },
 
-  submitButtonText: { 
-    color: "#fff", 
-    fontWeight: "bold", 
-    fontSize: 16 
+  submitButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16
   },
 
   // Modal Styling
-  modalContainer: { 
-    flex: 1, 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: "rgba(0,0,0,0.5)" 
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)"
   },
 
-  modalView: { 
-    backgroundColor: "white", 
-    padding: 20, 
-    borderRadius: 10, 
-    width: "90%", 
-    elevation: 10 
+  modalView: {
+    backgroundColor: "white",
+    padding: 20,
+    borderRadius: 10,
+    width: "90%",
+    elevation: 10
   },
 
-  modalTitle: { 
-    fontSize: 18, 
-    fontWeight: "bold", 
-    textAlign: "center", 
-    marginBottom: 10 
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 10
   },
 
-  input: { 
-    borderWidth: 1, 
-    borderColor: "#ddd", 
-    padding: 10, 
-    borderRadius: 5, 
-    marginBottom: 10, 
-    fontSize: 16 
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 10,
+    fontSize: 16
   },
 
-  saveButton: { 
-    backgroundColor: "#28a745", 
-    padding: 12, 
-    borderRadius: 5, 
-    alignItems: "center", 
-    marginTop: 10 
+  saveButton: {
+    backgroundColor: "#28a745",
+    padding: 12,
+    borderRadius: 5,
+    alignItems: "center",
+    marginTop: 10
   },
 
-  saveButtonText: { 
-    color: "#fff", 
-    fontWeight: "bold", 
-    fontSize: 16 
+  saveButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16
   }
 });
 

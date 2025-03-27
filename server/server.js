@@ -84,7 +84,7 @@ io.on("connection", (socket) => {
   // ✅ Vendor Accepts Order
   socket.on("acceptOrder", (data) => {
     console.log("✅ Order Accepted:", data);
-       
+
     db.query("UPDATE orders SET order_status = 'accepted' WHERE order_id = ?", [
       data.order_id
     ]);
