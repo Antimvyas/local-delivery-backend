@@ -464,7 +464,7 @@ app.get('/api/v1/vendors', (req, res) => {
 
 // ====>>>> orders table
 // Place an order
-app.post('/api/v1/orders',  (req, res) => {
+app.post('/api/v1/orders', (req, res) => {
   const { customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, items } = req.body;
 
   if (!customer_id || !vendor_id || !total_cost || !customers_location || !customers_contact || !payment_methods || !items || items.length === 0) {
@@ -493,7 +493,7 @@ app.post('/api/v1/orders',  (req, res) => {
       const customerName = customerResult[0].Name; // ✅ Store the customer name
 
       // ✅ Step 2: Insert Order into `orders` Table
-      function insertOrder () {
+      function insertOrder() {
         const orderQuery = `
           INSERT INTO orders 
             (customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods) 
