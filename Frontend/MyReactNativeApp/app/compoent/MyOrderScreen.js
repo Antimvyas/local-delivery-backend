@@ -1,22 +1,28 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, AppState } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  ScrollView,
+  AppState,
+  Animated,
+} from "react-native";
 import axios from "axios";
 import MyNavigation from "./MyNavigation.js";
 import API_BASE from "../config1.js";
-import socket from "../socket"; // WebSocket connection
-// import PushNotification from "react-native-push-notification";
+import socket from "../socket";
 
 const MyOrdersScreen = ({ route }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [orderStatus, setOrderStatus] = useState(null);
-  const [currentOrder, setCurrentOrder] = useState(null);
+  const [orderUpdates, setOrderUpdates] = useState([]); // ✅ Store multiple status updates
+  const fadeAnim = useRef(new Animated.Value(0)).current; // ✅ Animation Reference
   const customer_id = route.params?.customer_id;
 
   useEffect(() => {
-    console.log("order", customer_id);
-
     if (!customer_id) {
       console.error("Customer ID missing!");
       return;
@@ -24,20 +30,24 @@ const MyOrdersScreen = ({ route }) => {
 
     fetchOrders();
 
-    // ✅ Listen for order updates in real-time
+    // ✅ Listen for real-time order updates
     socket.on(`customer-${customer_id}-order-updated`, (data) => {
       console.log("🔄 Order Status Updated:", data);
 
-      if (data.status) {
-        setOrderStatus(data.status);
-        setCurrentOrder(data);
-        setIsModalVisible(true);
+      // ✅ Update orders list in real-time
+      // setOrders((prevOrders) =>
+      //   prevOrders.map((order) =>
+      //     order.order_id === data.order_id
+      //       ? { ...order, order_status: data.status }
+      //       : order
+      //   )
+      // );
 
-        // ✅ Show push notification if app is in background or closed
-        if (AppState.currentState !== "active") {
-          showPushNotification(data.status);
-        }
-      }
+      // ✅ Append update to floating modal
+      setOrderUpdates((prevUpdates) => [...prevUpdates, data]);
+      fadeIn();
+
+      setTimeout(() => fadeOut(), 4000); // ✅ Auto-hide after 4 seconds
     });
 
     return () => {
@@ -48,7 +58,9 @@ const MyOrdersScreen = ({ route }) => {
   // ✅ Fetch orders from backend
   const fetchOrders = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/customer/orders?customer_id=${customer_id}`);
+      const response = await axios.get(
+        `${API_BASE}/customer/orders/new?customer_id=${customer_id}`
+      );
       const groupedOrders = groupOrdersById(response.data);
       setOrders(groupedOrders);
       setLoading(false);
@@ -58,17 +70,7 @@ const MyOrdersScreen = ({ route }) => {
     }
   };
 
-  // ✅ Push Notification Function
-  const showPushNotification = (status) => {
-    PushNotification.localNotification({
-      title: "Order Update",
-      message: `Your order is now ${status}`,
-      playSound: true,
-      soundName: "default",
-    });
-  };
-
-  // ✅ Grouping orders by order_id to show in a single card
+  // ✅ Group orders by order_id
   const groupOrdersById = (orders) => {
     const grouped = orders.reduce((acc, order) => {
       const { order_id, total_cost, shop_name, food_name, quantity, order_status } = order;
@@ -79,6 +81,24 @@ const MyOrdersScreen = ({ route }) => {
       return acc;
     }, {});
     return Object.values(grouped);
+  };
+
+  // ✅ Fade in animation
+  const fadeIn = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // ✅ Fade out animation
+  const fadeOut = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: true,
+    }).start(() => setOrderUpdates([])); // Clear updates after fade-out
   };
 
   return (
@@ -103,7 +123,12 @@ const MyOrdersScreen = ({ route }) => {
                     {foodItem.food_name} (x{foodItem.quantity})
                   </Text>
                 ))}
-                <Text style={[styles.status, styles[item.order_status.toLowerCase()]]}>
+                <Text
+                  style={[
+                    styles.status,
+                    styles[item.order_status.toLowerCase()],
+                  ]}
+                >
                   Status: {item.order_status}
                 </Text>
               </View>
@@ -112,13 +137,21 @@ const MyOrdersScreen = ({ route }) => {
         />
       )}
 
-      {isModalVisible && currentOrder && (
-        <View style={styles.floatingModal}>
-          <Text style={styles.modalText}>Order Status: {orderStatus}</Text>
-          <TouchableOpacity onPress={() => setIsModalVisible(false)}>
+      {/* ✅ Floating Order Status Updates */}
+      {orderUpdates.length > 0 && (
+        <Animated.View style={[styles.floatingModal, { opacity: fadeAnim }]}>
+          <View>
+            <Text style={styles.modalTitle}>Order Updates:</Text>
+            {orderUpdates.map((update, index) => (
+              <Text key={index} style={styles.modalText}>
+                Order #{update.order_id} is now **{update.status}**
+              </Text>
+            ))}
+          </View>
+          <TouchableOpacity onPress={fadeOut}>
             <Text style={styles.closeButton}>Close</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       )}
 
       <TouchableOpacity>
@@ -134,7 +167,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", padding: 10 },
   card: {
     width: "90%",
-    height: "auto",
     alignSelf: "center",
     borderRadius: 10,
     padding: 20,
@@ -160,6 +192,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  modalText: { fontSize: 16, fontWeight: "bold" },
-  closeButton: { fontSize: 16, color: "blue", marginLeft: 10 },
+  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
+  modalText: { fontSize: 16, fontWeight: "bold", color: "blue" },
+  closeButton: { fontSize: 16, color: "red", marginLeft: 10 },
 });

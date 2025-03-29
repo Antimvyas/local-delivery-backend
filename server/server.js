@@ -40,87 +40,87 @@ io.on("connection", (socket) => {
     console.log("📦 New Order Received:", data);
 
     // 🛠️ Insert the order into the database (assuming you store it)
-    db.query(
-      "INSERT INTO orders (customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, order_status) VALUES (?, ?, ?, ?, ?, ?, 'pending')",
-      [
-        data.customer_id,
-        data.vendor_id,
-        data.total_cost,
-        data.customers_location,
-        data.customers_contact,
-        data.payment_methods,
-      ],
-      (err, result) => {
-        if (err) {
-          console.error("❌ Database Insert Error:", err);
-          return;
-        }
+    // db.query(
+    //   "INSERT INTO orders (customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, order_status) VALUES (?, ?, ?, ?, ?, ?, 'pending')",
+    //   [
+    //     data.customer_id,
+    //     data.vendor_id,
+    //     data.total_cost,
+    //     data.customers_location,
+    //     data.customers_contact,
+    //     data.payment_methods,
+    //   ],
+    //   (err, result) => {
+    //     if (err) {
+    //       console.error("❌ Database Insert Error:", err);
+    //       return;
+    //     }
 
-        const order_id = result.insertId; // ✅ Get the newly created order_id
-        console.log("🆕 New Order ID:", order_id);
+    //     const order_id = result.insertId; // ✅ Get the newly created order_id
+    //     console.log("🆕 New Order ID:", order_id);
 
-        const orderData = {
-          ...data,
-          order_id, // ✅ Attach order_id to the order data
-        };
+    //     const orderData = {
+    //       ...data,
+    //       order_id, // ✅ Attach order_id to the order data
+    //     };
 
-        // Notify vendor in real-time (if online)
-        const vendorSocket = vendorSockets.get(data.vendor_id);
-        if (vendorSocket) {
-          vendorSocket.emit("newOrderNotification", orderData);
-        }
+    //     // Notify vendor in real-time (if online)
+    //     const vendorSocket = vendorSockets.get(data.vendor_id);
+    //     if (vendorSocket) {
+    //       vendorSocket.emit("newOrderNotification", orderData);
+    //     }
 
-        // 📌 Auto-Reject Order After 5 Minutes
-        setTimeout(() => {
-          db.query(
-            "SELECT order_status FROM orders WHERE order_id = ?",
-            [order_id],
-            (err, result) => {
-              if (err || result.length === 0) return;
+    //     // 📌 Auto-Reject Order After 5 Minutes
+    //     setTimeout(() => {
+    //       db.query(
+    //         "SELECT order_status FROM orders WHERE order_id = ?",
+    //         [order_id],
+    //         (err, result) => {
+    //           if (err || result.length === 0) return;
 
-              if (result[0].order_status === "pending") {
-                db.query("UPDATE orders SET order_status = 'rejected' WHERE order_id = ?", [order_id]);
+    //           if (result[0].order_status === "pending") {
+    //             db.query("UPDATE orders SET order_status = 'rejected' WHERE order_id = ?", [order_id]);
 
-                console.log("🚫 Order Auto-Rejected:", order_id);
+    //             console.log("🚫 Order Auto-Rejected:", order_id);
 
-                io.emit(`customer-${data.customer_id}-order-updated`, {
-                  order_id,
-                  status: "rejected",
-                });
+    //             io.emit(`customer-${data.customer_id}-order-updated`, {
+    //               order_id,
+    //               status: "rejected",
+    //             });
 
-                const vendorSocket = vendorSockets.get(data.vendor_id);
-                if (vendorSocket) {
-                  vendorSocket.emit("orderAutoRejected", { order_id, status: "Rejected" });
-                }
-              }
-            }
-          );
-        }, 300000); // 5 minutes (300,000 ms)
-      }
-    );
+    //             const vendorSocket = vendorSockets.get(data.vendor_id);
+    //             if (vendorSocket) {
+    //               vendorSocket.emit("orderAutoRejected", { order_id, status: "Rejected" });
+    //             }
+    //           }
+    //         }
+    //       );
+    //     }, 300000); // 5 minutes (300,000 ms)
+    //   }
+    // );
   });
   // ✅ Emit Order Status Updates to Customer in Real-Time
-socket.on("updateOrderStatus", (data) => {
-  console.log(`🔄 Order Status Updated: ${data.status}`, data);
+  socket.on("updateOrderStatus", (data) => {
+    console.log(`🔄 Order Status Updated: ${data.status}`, data);
 
-  if (!data.order_id || !data.status) {
-    console.log("❌ Error: Missing order_id or status in updateOrderStatus event");
-    return;
-  }
+    if (!data.order_id || !data.status) {
+      console.log("❌ Error: Missing order_id or status in updateOrderStatus event");
+      return;
+    }
 
-  // ✅ Update the order status in the database
-  db.query("UPDATE orders SET order_status = ? WHERE order_id = ?", [data.status, data.order_id]);
+    // ✅ Update the order status in the database
+    db.query("UPDATE orders SET order_status = ? WHERE order_id = ?", [data.status, data.order_id]);
 
-  const orderUpdate = {
-    order_id: data.order_id,
-    customer_id: data.customer_id,
-    vendor_id: data.vendor_id,
-    status: data.status,
-  };
+    const orderUpdate = {
+      order_id: data.order_id,
+      customer_id: data.customer_id,
+      vendor_id: data.vendor_id,
+      status: data.status,
+    };
 
-  // 🔥 Emit the update to the specific customer
-  io.emit(`customer-${data.customer_id}-order-updated`, orderUpdate);
-});
+    // 🔥 Emit the update to the specific customer
+    io.emit(`customer-${data.customer_id}-order-updated`, orderUpdate);
+  });
 
 
   // ✅ Vendor Accepts Order
@@ -464,7 +464,7 @@ app.get('/api/v1/vendors', (req, res) => {
 
 // ====>>>> orders table
 // Place an order
-app.post('/api/v1/orders', (req, res) => {
+app.post('/api/v1/orders',  (req, res) => {
   const { customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, items } = req.body;
 
   if (!customer_id || !vendor_id || !total_cost || !customers_location || !customers_contact || !payment_methods || !items || items.length === 0) {
@@ -493,7 +493,7 @@ app.post('/api/v1/orders', (req, res) => {
       const customerName = customerResult[0].Name; // ✅ Store the customer name
 
       // ✅ Step 2: Insert Order into `orders` Table
-      function insertOrder() {
+      function insertOrder () {
         const orderQuery = `
           INSERT INTO orders 
             (customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods) 
@@ -694,7 +694,7 @@ app.get("/api/v1/vendor/orders", (req, res) => {
 // });
 
 // for fetch orders for customer
-app.get('/api/v1/customer/orders', async (req, res) => {
+app.get('/api/v1/customer/orders/new', async (req, res) => {
   try {
     const customer_id = req.query.customer_id;
     console.log("Received customer_id:", customer_id);
@@ -703,26 +703,26 @@ app.get('/api/v1/customer/orders', async (req, res) => {
       return res.status(400).json({ error: "Customer ID is required" });
     }
 
-    // Corrected SQL Query
+    // ✅ Fetch ALL orders, no matter their status
     const query = `
-          SELECT 
-              o.order_id, o.customer_id, o.vendor_id, 
-              oi.food_name, oi.quantity, 
-              o.total_cost, o.order_status, 
-              v.shop_name, o.customers_location, o.customers_contact
-          FROM orders o
-          JOIN vendor v ON o.vendor_id = v.vendor_id
-          JOIN customers c ON o.customer_id = c.customer_id
-          JOIN order_items oi ON o.order_id = oi.order_id
-          WHERE o.customer_id = ?;
-      `;
+      SELECT 
+          o.order_id, o.customer_id, o.vendor_id, 
+          oi.food_name, oi.quantity, 
+          o.total_cost, o.order_status, 
+          v.shop_name, o.customers_location, o.customers_contact
+      FROM orders o
+      JOIN vendor v ON o.vendor_id = v.vendor_id
+      JOIN customers c ON o.customer_id = c.customer_id
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.customer_id = ?;
+    `;
 
     db.query(query, [customer_id], (err, results) => {
       if (err) {
         console.error("Error fetching orders:", err);
         return res.status(500).json({ error: "Internal Server Error" });
       }
-      res.json(results);
+      res.json(results); // ✅ Return all orders
     });
 
   } catch (error) {
@@ -730,6 +730,7 @@ app.get('/api/v1/customer/orders', async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 
 // 📌 Fetch All Accepted Orders for a Vendor
@@ -767,14 +768,14 @@ app.get("/api/v1/vendor/accepted-orders", (req, res) => {
 // 📌 Update Order Status (Preparing → Ready → Out for Delivery)
 app.put('/api/v1/vendor/orders/update-status', (req, res) => {
   const { order_id, vendor_id, customer_id, new_status } = req.body;
-  
+
   // Update the order status in the database
   db.query("UPDATE orders SET order_status = ? WHERE order_id = ?", [new_status, order_id], (err, result) => {
     if (err) {
       console.error("Error updating order status:", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
-    
+
     // Create an update payload
     const updateData = {
       order_id,
@@ -782,10 +783,10 @@ app.put('/api/v1/vendor/orders/update-status', (req, res) => {
       vendor_id,
       status: new_status,
     };
-    
+
     // Emit the update event to the customer using Socket.io
     io.emit(`customer-${customer_id}-order-updated`, updateData);
-    
+
     res.json({ message: "Order status updated", update: updateData });
   });
 });
