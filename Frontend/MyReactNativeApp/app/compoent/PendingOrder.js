@@ -23,72 +23,24 @@ const PendingOrder = ({ navigation, route }) => {
   let notificationSound = useRef(null);
 
   useEffect(() => {
-    if (!vendor_id) {
-      Alert.alert("Error", "Vendor ID not found!", [{ text: "Go Back", onPress: () => navigation.goBack() }]);
-      return;
-    }
-
-    fetchOrders();
-    checkStoredOrders();
-
-    socket.emit("registerVendor", vendor_id);
-
-    socket.on("newOrderNotification", async (data) => {
-      console.log("🔔 New Order Received:", data);
+    if (!vendor_id) return;
+  
+    console.log(`🎧 Listening for vendor-${vendor_id}-new-order events...`);
+  
+    socket.on(`vendor-${vendor_id}-new-order`, (data) => {
+      console.log("🔥 New Order Broadcast Received:", data);
       playNotificationSound();
-      await AsyncStorage.setItem("newOrder", JSON.stringify(data));
-      // console.log("datta",await AsyncStorage.setItem("newOrder", JSON.stringify(data)) );
-
-      console.log("l", data);
-
       setNewOrder(data);
       setIsModalVisible(true);
-
-      eventEmitter.emit("SHOW_MODAL", data); // ✅ Send event to show modal on any screen
     });
-
-    socket.on("orderAutoRejected", (data) => {
-      console.log("🚫 Order Auto-Rejected:", data);
-      fetchOrders();
-      Alert.alert("Order Rejected", "This order was automatically rejected after 5 minutes.");
-    });
-
-    BackgroundTimer.runBackgroundTimer(() => {
-      if (!socket.connected) {
-        socket.connect();
-        socket.emit("registerVendor", vendor_id);
-      }
-    }, 10000);
-
-
-
-    const handleAppStateChange = async (nextAppState) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === "active") {
-        console.log("🔄 App moved to Foreground");
-        checkStoredOrders();
-      }
-      appState.current = nextAppState;
-    };
-
-    const subscription = AppState.addEventListener("change", handleAppStateChange);
-
-    const modalListener = eventEmitter.addListener("SHOW_MODAL", (order) => {
-      console.log("🔔 Show modal event received", order);
-      setNewOrder(order);
-      setIsModalVisible(true);
-      playNotificationSound();
-    });
-
-    // ✅ Fix: Use removeAllListeners instead of .remove()
+  
     return () => {
-      socket.off("newOrderNotification");
-      socket.off("orderAutoRejected");
-      BackgroundTimer.stopBackgroundTimer();
-      subscription.remove();
-      eventEmitter.removeAllListeners("SHOW_MODAL"); // ✅ Fixes the issue
+      console.log(`❌ Removing listener for vendor-${vendor_id}-new-order`);
+      socket.off(`vendor-${vendor_id}-new-order`);
     };
-
   }, [vendor_id]);
+  
+  
 
   const checkStoredOrders = async () => {
     const storedOrder = await AsyncStorage.getItem("newOrder");
@@ -132,32 +84,32 @@ const PendingOrder = ({ navigation, route }) => {
     }
   };
 
- const handleAcceptOrder = async () => {
-  if (!newOrder || !newOrder.order_id) {
-    console.log("❌ Error: Order ID is missing!", newOrder);
-    Alert.alert("Error", "Unable to accept order. Order ID is missing.");
-    return;
-  }
+  const handleAcceptOrder = async () => {
+    if (!newOrder || !newOrder.order_id) {
+      console.log("❌ Error: Order ID is missing!", newOrder);
+      Alert.alert("Error", "Unable to accept order. Order ID is missing.");
+      return;
+    }
 
-  try {
-    socket.emit("acceptOrder", {
-      order_id: newOrder.order_id,
-      customer_id: newOrder.customer_id,
-      vendor_id: vendor_id // Ensure vendor_id is sent
-    });
+    try {
+      socket.emit("acceptOrder", {
+        order_id: newOrder.order_id,
+        customer_id: newOrder.customer_id,
+        vendor_id: vendor_id // Ensure vendor_id is sent
+      });
 
-    console.log("✅ Order Accepted:", newOrder.order_id);
-    Alert.alert("Success", "Order Accepted!");
+      console.log("✅ Order Accepted:", newOrder.order_id);
+      Alert.alert("Success", "Order Accepted!");
 
-    stopNotificationSound();
-    setIsModalVisible(false);
-    await AsyncStorage.removeItem("newOrder");
-    fetchOrders();
-  } catch (error) {
-    console.log("❌ Error accepting order:", error);
-    Alert.alert("Error", "Failed to accept order. Please try again.");
-  }
-};
+      stopNotificationSound();
+      setIsModalVisible(false);
+      await AsyncStorage.removeItem("newOrder");
+      fetchOrders();
+    } catch (error) {
+      console.log("❌ Error accepting order:", error);
+      Alert.alert("Error", "Failed to accept order. Please try again.");
+    }
+  };
 
 
   const handleRejectOrder = async () => {

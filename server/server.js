@@ -23,146 +23,114 @@ const io = socketIo(server, {
     origin: "*", // Adjust for production
   }
 });
-
-const vendorSockets = new Map(); // Store vendor WebSocket connections
-
+global.io = io;
 io.on("connection", (socket) => {
   console.log(`🔌 New vendor connected: ${socket.id}`);
 
-  // ✅ Register vendor connection
-  socket.on("registerVendor", (vendor_id) => {
-    vendorSockets.set(vendor_id, socket);
-    console.log(`✅ Vendor Registered: ${vendor_id}`);
-  });
+  // ✅ Listen for new orders (emitted from API)
+  // socket.on("registerVendor", (vendor_id) => {
+  //   vendorSockets.set(vendor_id, socket);
+  //   console.log(`✅ Vendor Registered: ${vendor_id}`);
+  // });
+  socket.on("newOrder", (data) => {
+    console.log("📦 Broadcasting new order:", data);
 
-  // ✅ When a new order is placed
-  socket.on("placeOrder", async (data) => {
-    console.log("📦 New Order Received:", data);
-
-    // 🛠️ Insert the order into the database (assuming you store it)
-    // db.query(
-    //   "INSERT INTO orders (customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, order_status) VALUES (?, ?, ?, ?, ?, ?, 'pending')",
-    //   [
-    //     data.customer_id,
-    //     data.vendor_id,
-    //     data.total_cost,
-    //     data.customers_location,
-    //     data.customers_contact,
-    //     data.payment_methods,
-    //   ],
-    //   (err, result) => {
-    //     if (err) {
-    //       console.error("❌ Database Insert Error:", err);
-    //       return;
-    //     }
-
-    //     const order_id = result.insertId; // ✅ Get the newly created order_id
-    //     console.log("🆕 New Order ID:", order_id);
-
-    //     const orderData = {
-    //       ...data,
-    //       order_id, // ✅ Attach order_id to the order data
-    //     };
-
-    //     // Notify vendor in real-time (if online)
-    //     const vendorSocket = vendorSockets.get(data.vendor_id);
-    //     if (vendorSocket) {
-    //       vendorSocket.emit("newOrderNotification", orderData);
-    //     }
-
-    //     // 📌 Auto-Reject Order After 5 Minutes
-    //     setTimeout(() => {
-    //       db.query(
-    //         "SELECT order_status FROM orders WHERE order_id = ?",
-    //         [order_id],
-    //         (err, result) => {
-    //           if (err || result.length === 0) return;
-
-    //           if (result[0].order_status === "pending") {
-    //             db.query("UPDATE orders SET order_status = 'rejected' WHERE order_id = ?", [order_id]);
-
-    //             console.log("🚫 Order Auto-Rejected:", order_id);
-
-    //             io.emit(`customer-${data.customer_id}-order-updated`, {
-    //               order_id,
-    //               status: "rejected",
-    //             });
-
-    //             const vendorSocket = vendorSockets.get(data.vendor_id);
-    //             if (vendorSocket) {
-    //               vendorSocket.emit("orderAutoRejected", { order_id, status: "Rejected" });
-    //             }
-    //           }
-    //         }
-    //       );
-    //     }, 300000); // 5 minutes (300,000 ms)
-    //   }
-    // );
-  });
-  // ✅ Emit Order Status Updates to Customer in Real-Time
-  socket.on("updateOrderStatus", (data) => {
-    console.log(`🔄 Order Status Updated: ${data.status}`, data);
-
-    if (!data.order_id || !data.status) {
-      console.log("❌ Error: Missing order_id or status in updateOrderStatus event");
-      return;
-    }
-
-    // ✅ Update the order status in the database
-    db.query("UPDATE orders SET order_status = ? WHERE order_id = ?", [data.status, data.order_id]);
-
-    const orderUpdate = {
+    // ✅ Notify all vendors in real time
+    socket.broadcast.emit(`vendor-${data.vendor_id}-new-order`, {
       order_id: data.order_id,
+      total_cost: data.total_cost,
       customer_id: data.customer_id,
-      vendor_id: data.vendor_id,
-      status: data.status,
-    };
-
-    // 🔥 Emit the update to the specific customer
-    io.emit(`customer-${data.customer_id}-order-updated`, orderUpdate);
+      customers_location: data.customers_location,
+      customers_contact: data.customers_contact,
+      payment_methods: data.payment_methods,
+    });
   });
+  // setTimeout(() => {
+  //         db.query(
+  //           "SELECT order_status FROM orders WHERE order_id = ?",
+  //           [order_id],
+  //           (err, result) => {
+  //             if (err || result.length === 0) return;
+
+  //             if (result[0].order_status === "pending") {
+  //               db.query("UPDATE orders SET order_status = 'rejected' WHERE order_id = ?", [order_id]);
+
+  //               console.log("🚫 Order Auto-Rejected:", order_id);
+
+  //               io.emit(`customer-${data.customer_id}-order-updated`, {
+  //                 order_id,
+  //                 status: "rejected",
+  //               });
+
+  //               const vendorSocket = vendorSockets.get(data.vendor_id);
+  //               if (vendorSocket) {
+  //                 vendorSocket.emit("orderAutoRejected", { order_id, status: "Rejected" });
+  //               }
+  //             }
+  //           }
+  //         );
+  // }, 300000); // 5 minutes (300,000 ms)
+
+  // ✅ Emit Order Status Updates to Customer in Real-Time
+  // socket.on("updateOrderStatus", (data) => {
+  //   console.log(`🔄 Order Status Updated: ${data.status}`, data);
+
+  //   if (!data.order_id || !data.status) {
+  //     console.log("❌ Error: Missing order_id or status in updateOrderStatus event");
+  //     return;
+  //   }
+
+  //   // ✅ Update the order status in the database
+  //   db.query("UPDATE orders SET order_status = ? WHERE order_id = ?", [data.status, data.order_id]);
+
+  //   const orderUpdate = {
+  //     order_id: data.order_id,
+  //     customer_id: data.customer_id,
+  //     vendor_id: data.vendor_id,
+  //     status: data.status,
+  //   };
+
+  //   // 🔥 Emit the update to the specific customer
+  //   io.emit(`customer-${data.customer_id}-order-updated`, orderUpdate);
+  // });
 
 
   // ✅ Vendor Accepts Order
-  socket.on("acceptOrder", (data) => {
-    console.log("✅ Order Accepted:", data);
+  // socket.on("acceptOrder", (data) => {
+  //   console.log("✅ Order Accepted:", data);
 
-    if (!data.order_id) {
-      console.log("❌ Error: Missing order_id in acceptOrder event");
-      return;
-    }
+  //   if (!data.order_id) {
+  //     console.log("❌ Error: Missing order_id in acceptOrder event");
+  //     return;
+  //   }
 
-    db.query("UPDATE orders SET order_status = 'accepted' WHERE order_id = ?", [data.order_id]);
+  //   db.query("UPDATE orders SET order_status = 'accepted' WHERE order_id = ?", [data.order_id]);
 
-    io.emit(`customer-${data.customer_id}-order-updated`, {
-      order_id: data.order_id,
-      status: "Accepted",
-    });
-  });
+  //   io.emit(`customer-${data.customer_id}-order-updated`, {
+  //     order_id: data.order_id,
+  //     status: "Accepted",
+  //   });
+  // });
 
   // ✅ Vendor Rejects Order
-  socket.on("rejectOrder", (data) => {
-    console.log("❌ Order Rejected:", data);
+  // socket.on("rejectOrder", (data) => {
+  //   console.log("❌ Order Rejected:", data);
 
-    if (!data.order_id) {
-      console.log("❌ Error: Missing order_id in rejectOrder event");
-      return;
-    }
+  //   if (!data.order_id) {
+  //     console.log("❌ Error: Missing order_id in rejectOrder event");
+  //     return;
+  //   }
 
-    db.query("UPDATE orders SET order_status = 'Rejected' WHERE order_id = ?", [data.order_id]);
+  //   db.query("UPDATE orders SET order_status = 'Rejected' WHERE order_id = ?", [data.order_id]);
 
-    io.emit(`customer-${data.customer_id}-order-updated`, {
-      order_id: data.order_id,
-      status: "Rejected",
-    });
-  });
-
-  // ✅ Handle vendor disconnection
+  //   io.emit(`customer-${data.customer_id}-order-updated`, {
+  //     order_id: data.order_id,
+  //     status: "Rejected",
+  //   });
+  // });
+  // ✅ Handle disconnections
   socket.on("disconnect", () => {
     console.log(`❌ Vendor disconnected: ${socket.id}`);
-    vendorSockets.forEach((value, key) => {
-      if (value === socket) vendorSockets.delete(key);
-    });
   });
 });
 
@@ -595,12 +563,21 @@ app.post('/api/v1/orders', (req, res) => {
             return db.rollback(() => res.status(500).json({ error: 'Failed to finalize order' }));
           }
 
-          // Notify vendor via WebSocket
-          io.emit(`vendor-${vendor_id}-new-order`, { order_id });
+          // ✅ Emit WebSocket event for real-time order update
+          io.emit("newOrder", {
+            order_id,
+            vendor_id,
+            total_cost,
+            customer_id,
+            customers_location,
+            customers_contact,
+            payment_methods
+          });
 
           res.json({ message: 'Order placed successfully', order_id });
         });
       }
+
 
       // ✅ Step 7: Check if Credit is Allowed (Udar Check)
       if (payment_methods === 'credit') {
