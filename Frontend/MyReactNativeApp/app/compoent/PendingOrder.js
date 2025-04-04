@@ -25,20 +25,30 @@ const PendingOrder = ({ navigation, route }) => {
   useEffect(() => {
     if (!vendor_id) return;
   
-    console.log(`🎧 Listening for vendor-${vendor_id}-new-order events...`);
+    console.log(`🎧 Listening for vendor-${vendor_id}-order-updated events...`);
   
-    socket.on(`vendor-${vendor_id}-new-order`, (data) => {
-      console.log("🔥 New Order Broadcast Received:", data);
+    const handleOrderUpdate = (data) => {
+      console.log("🔄 Order Updated:", data);
       playNotificationSound();
-      setNewOrder(data);
-      setIsModalVisible(true);
-    });
+      fetchOrders()
+      // ✅ Remove the accepted/rejected order from pending list
+      setOrders((prevOrders) => prevOrders.filter(order => order.order_id !== data.order_id));
+  
+      // ✅ If order was rejected, close modal
+      if (data.status === "Rejected") {
+        setIsModalVisible(false);
+      }
+    };
+  
+    socket.on(`vendor-${vendor_id}-order-updated`, handleOrderUpdate);
   
     return () => {
-      console.log(`❌ Removing listener for vendor-${vendor_id}-new-order`);
-      socket.off(`vendor-${vendor_id}-new-order`);
+      console.log(`❌ Removing listener for vendor-${vendor_id}-order-updated`);
+      socket.off(`vendor-${vendor_id}-order-updated`, handleOrderUpdate);
     };
+   
   }, [vendor_id]);
+  
   
   
 
@@ -65,14 +75,19 @@ const PendingOrder = ({ navigation, route }) => {
   };
 
   const playNotificationSound = () => {
+    console.log("🔔 Playing notification sound...");
+  
     notificationSound.current = new Sound("notify.mp3", Sound.MAIN_BUNDLE, (error) => {
       if (error) {
         console.log("❌ Sound load error:", error);
         return;
       }
-      notificationSound.current.play();
+      notificationSound.current.play((success) => {
+        if (!success) console.log("❌ Sound playback failed");
+      });
     });
   };
+  
 
   const stopNotificationSound = () => {
     if (notificationSound.current) {
@@ -86,42 +101,45 @@ const PendingOrder = ({ navigation, route }) => {
 
   const handleAcceptOrder = async () => {
     if (!newOrder || !newOrder.order_id) {
-      console.log("❌ Error: Order ID is missing!", newOrder);
-      Alert.alert("Error", "Unable to accept order. Order ID is missing.");
+      Alert.alert("Error", "Order ID is missing.");
       return;
     }
-
-    try {
-      socket.emit("acceptOrder", {
-        order_id: newOrder.order_id,
-        customer_id: newOrder.customer_id,
-        vendor_id: vendor_id // Ensure vendor_id is sent
-      });
-
-      console.log("✅ Order Accepted:", newOrder.order_id);
-      Alert.alert("Success", "Order Accepted!");
-
-      stopNotificationSound();
-      setIsModalVisible(false);
-      await AsyncStorage.removeItem("newOrder");
-      fetchOrders();
-    } catch (error) {
-      console.log("❌ Error accepting order:", error);
-      Alert.alert("Error", "Failed to accept order. Please try again.");
-    }
+  
+    console.log("✅ Accepting order:", newOrder.order_id);
+  
+    socket.emit("acceptOrder", {
+      order_id: newOrder.order_id,
+      customer_id: newOrder.customer_id,
+      vendor_id: vendor_id, // Send vendor_id for proper broadcasting
+    });
+  
+    Alert.alert("Success", "Order Accepted!");
+    stopNotificationSound();
+    setIsModalVisible(false);
+    await AsyncStorage.removeItem("newOrder");
+    fetchOrders(); // Refresh order list
   };
+  
 
 
   const handleRejectOrder = async () => {
-    if (!newOrder) return;
-
-    socket.emit("rejectOrder", { order_id: newOrder.order_id, customer_id: newOrder.customer_id });
+    if (!newOrder || !newOrder.order_id) return;
+  
+    console.log("❌ Rejecting order:", newOrder.order_id);
+  
+    socket.emit("rejectOrder", {
+      order_id: newOrder.order_id,
+      customer_id: newOrder.customer_id,
+      vendor_id: vendor_id,
+    });
+  
     Alert.alert("Order Rejected", "You have rejected the order.");
     stopNotificationSound();
     setIsModalVisible(false);
     await AsyncStorage.removeItem("newOrder");
     fetchOrders();
   };
+  
   console.log("f", orders);
 
   return (

@@ -46,7 +46,7 @@ const FoodList = ({ route }) => {
   const addToCart = async (item) => {
     let updatedCart = [...cart];
     const existingItem = updatedCart.find((cartItem) => cartItem.food_id === item.food_id);
-    
+
     if (existingItem) {
       existingItem.quantity += 1;
     } else {
@@ -136,12 +136,12 @@ const FoodList = ({ route }) => {
             {selectedItem.food_name} - {cart.find((item) => item.food_id === selectedItem.food_id)?.quantity || 0} added
           </Text>
           <TouchableOpacity
-            
+
             onPress={() => navigation.navigate("CartScreen", { cart, vendor_id, customer_id })}
           >
-             <Image source={require("../android/app/src/main/assets/cart.png")}
-                                style={styles.ratingImage}
-                            />
+            <Image source={require("../android/app/src/main/assets/cart.png")}
+              style={styles.ratingImage}
+            />
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -209,11 +209,11 @@ const styles = StyleSheet.create({
   },
   quantityButton: { fontSize: 20, paddingHorizontal: 10, color: "black" },
   quantityText: { fontSize: 18, marginHorizontal: 10 },
-  
+
   floatingCart: {
     position: "absolute",
-    height:110,
-    width:"90%",
+    height: 110,
+    width: "90%",
     bottom: 20,
     left: 20,
     // right: 20,
