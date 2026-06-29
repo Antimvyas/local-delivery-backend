@@ -1,0 +1,22 @@
+{
+  "name": "app",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.1.1",
+    "jwt-decode": "^4.0.0",
+    "multer": "^1.4.5-lts.1",
+    "react-native": "0.77.0"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "latest"
+  },
+  "main": "index.js",
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}

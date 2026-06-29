@@ -1,0 +1,136 @@
+# ==========================
+# macOS
+# ==========================
+.DS_Store
+
+# ==========================
+# Node
+# ==========================
+node_modules/
+**/node_modules/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================
+# Environment
+# ==========================
+.env
+.env.*
+!.env.example
+
+# ==========================
+# IDE
+# ==========================
+.vscode/
+.idea/
+*.iml
+
+# ==========================
+# Android
+# ==========================
+.gradle/
+**/.gradle/
+
+build/
+**/build/
+
+.cxx/
+local.properties
+
+*.keystore
+!debug.keystore
+
+*.apk
+*.aab
+
+# ==========================
+# iOS
+# ==========================
+DerivedData/
+**/Pods/
+*.ipa
+
+xcuserdata/
+*.xcuserstate
+**/.xcode.env.local
+
+# ==========================
+# Xcode
+# ==========================
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.xccheckout
+*.moved-aside
+*.hmap
+
+# ==========================
+# Metro
+# ==========================
+.metro-health-check*
+
+# ==========================
+# Coverage
+# ==========================
+coverage/
+
+# ==========================
+# Fastlane
+# ==========================
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots/
+**/fastlane/test_output/
+
+# ==========================
+# Bundles
+# ==========================
+*.jsbundle
+
+# ==========================
+# Logs
+# ==========================
+logs/
+*.log
+
+# ==========================
+# Temporary
+# ==========================
+temp/
+tmp/
+artifacts/
+
+# ==========================
+# Screenshots & Debug Files
+# ==========================
+emulator_screen.png
+physical_screen.png
+screen*.png
+vendor_dash.png
+
+window_dump*.xml
+window_current.xml
+
+# ==========================
+# Database Dumps
+# ==========================
+*.sql
+*.sqlite
+*.db
+
+# ==========================
+# Misc
+# ==========================
+Thumbs.db
+
+node_modules/
+**/node_modules/
+.vscode/

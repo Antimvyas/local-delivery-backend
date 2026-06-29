@@ -1,0 +1,668 @@
+Tables in database:
+[
+  {
+    "Tables_in_app": "account"
+  },
+  {
+    "Tables_in_app": "customer"
+  },
+  {
+    "Tables_in_app": "food"
+  },
+  {
+    "Tables_in_app": "order_items"
+  },
+  {
+    "Tables_in_app": "orders"
+  },
+  {
+    "Tables_in_app": "payment_requests"
+  },
+  {
+    "Tables_in_app": "student"
+  },
+  {
+    "Tables_in_app": "udar_requests"
+  },
+  {
+    "Tables_in_app": "vendor"
+  },
+  {
+    "Tables_in_app": "vendor_transaction"
+  }
+]
+
+==================================================
+Schema for table: account
+==================================================
+Field: account_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: vendor_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: customer_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: order_id
+  Type: int
+  Null: YES
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: customer_name
+  Type: varchar(100)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: food_name
+  Type: varchar(100)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: quantity
+  Type: int
+  Null: YES
+  Key: 
+  Default: 0
+  Extra: 
+--------------------------------------------------
+Field: cost
+  Type: decimal(10,2)
+  Null: YES
+  Key: 
+  Default: 0.00
+  Extra: 
+--------------------------------------------------
+Field: total_cost
+  Type: decimal(10,2)
+  Null: YES
+  Key: 
+  Default: 0.00
+  Extra: 
+--------------------------------------------------
+Field: order_date_time
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: debit_value_vendor
+  Type: decimal(10,2)
+  Null: YES
+  Key: 
+  Default: 0.00
+  Extra: 
+--------------------------------------------------
+Field: credit_value_vendor
+  Type: decimal(10,2)
+  Null: YES
+  Key: 
+  Default: 0.00
+  Extra: 
+--------------------------------------------------
+Field: debit_customer
+  Type: decimal(10,2)
+  Null: YES
+  Key: 
+  Default: 0.00
+  Extra: 
+--------------------------------------------------
+Field: credit_customer
+  Type: decimal(10,2)
+  Null: YES
+  Key: 
+  Default: 0.00
+  Extra: 
+--------------------------------------------------
+Field: balance_due
+  Type: decimal(10,2)
+  Null: YES
+  Key: 
+  Default: 0.00
+  Extra: 
+--------------------------------------------------
+Field: payment_method
+  Type: enum('cash','credit','online')
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: payment_status
+  Type: enum('pending','paid','partial')
+  Null: YES
+  Key: 
+  Default: pending
+  Extra: 
+--------------------------------------------------
+Field: payment_date_time
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: created_at
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: CURRENT_TIMESTAMP
+  Extra: DEFAULT_GENERATED
+--------------------------------------------------
+
+==================================================
+Schema for table: customer
+==================================================
+Field: customer_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: username
+  Type: varchar(255)
+  Null: NO
+  Key: UNI
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: Name
+  Type: varchar(255)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: Phone
+  Type: char(10)
+  Null: NO
+  Key: UNI
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: password
+  Type: varchar(255)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: selectedOption
+  Type: char(15)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: customer_address
+  Type: varchar(255)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+
+==================================================
+Schema for table: food
+==================================================
+Field: food_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: food_name
+  Type: varchar(100)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: cost
+  Type: decimal(10,2)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: food_img
+  Type: varchar(255)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: food_type
+  Type: varchar(50)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: food_description
+  Type: text
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: vendor_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: is_available
+  Type: tinyint(1)
+  Null: YES
+  Key: 
+  Default: 1
+  Extra: 
+--------------------------------------------------
+Field: created_at
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: CURRENT_TIMESTAMP
+  Extra: DEFAULT_GENERATED
+--------------------------------------------------
+
+==================================================
+Schema for table: order_items
+==================================================
+Field: item_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: order_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: food_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: food_name
+  Type: varchar(100)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: quantity
+  Type: int
+  Null: NO
+  Key: 
+  Default: 1
+  Extra: 
+--------------------------------------------------
+Field: item_total
+  Type: decimal(10,2)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: created_at
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: CURRENT_TIMESTAMP
+  Extra: DEFAULT_GENERATED
+--------------------------------------------------
+
+==================================================
+Schema for table: orders
+==================================================
+Field: order_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: customer_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: vendor_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: total_cost
+  Type: decimal(10,2)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: customers_location
+  Type: text
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: customers_contact
+  Type: varchar(15)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: payment_methods
+  Type: enum('cash','credit','online')
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: order_status
+  Type: enum('pending','accepted','rejected','preparing','ready','out for delivery','delivered')
+  Null: YES
+  Key: 
+  Default: pending
+  Extra: 
+--------------------------------------------------
+Field: order_date_time
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: CURRENT_TIMESTAMP
+  Extra: DEFAULT_GENERATED
+--------------------------------------------------
+
+==================================================
+Schema for table: payment_requests
+==================================================
+Field: request_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: customer_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: vendor_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: amount
+  Type: decimal(10,2)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: status
+  Type: enum('pending','complete','rejected')
+  Null: YES
+  Key: 
+  Default: pending
+  Extra: 
+--------------------------------------------------
+Field: request_time
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: CURRENT_TIMESTAMP
+  Extra: DEFAULT_GENERATED
+--------------------------------------------------
+Field: completed_time
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+
+==================================================
+Schema for table: student
+==================================================
+Field: id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: name
+  Type: varchar(50)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: age
+  Type: int
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+
+==================================================
+Schema for table: udar_requests
+==================================================
+Field: request_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: customer_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: vendor_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: customer_name
+  Type: varchar(100)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: status
+  Type: enum('pending','accepted','rejected')
+  Null: YES
+  Key: 
+  Default: pending
+  Extra: 
+--------------------------------------------------
+Field: request_date
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: CURRENT_TIMESTAMP
+  Extra: DEFAULT_GENERATED
+--------------------------------------------------
+
+==================================================
+Schema for table: vendor
+==================================================
+Field: vendor_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: username
+  Type: varchar(50)
+  Null: NO
+  Key: UNI
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: Name
+  Type: varchar(100)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: Phone
+  Type: varchar(15)
+  Null: NO
+  Key: UNI
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: password
+  Type: varchar(255)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: selectedOption
+  Type: varchar(20)
+  Null: YES
+  Key: 
+  Default: vendor
+  Extra: 
+--------------------------------------------------
+Field: Shop_name
+  Type: varchar(150)
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: shop_address
+  Type: text
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: open_close_timings
+  Type: json
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: is_online
+  Type: tinyint(1)
+  Null: YES
+  Key: 
+  Default: 0
+  Extra: 
+--------------------------------------------------
+Field: created_at
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: CURRENT_TIMESTAMP
+  Extra: DEFAULT_GENERATED
+--------------------------------------------------
+
+==================================================
+Schema for table: vendor_transaction
+==================================================
+Field: transaction_id
+  Type: int
+  Null: NO
+  Key: PRI
+  Default: null
+  Extra: auto_increment
+--------------------------------------------------
+Field: customer_id
+  Type: int
+  Null: NO
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: vendor_id
+  Type: int
+  Null: YES
+  Key: MUL
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: amount
+  Type: decimal(10,2)
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: transaction_type
+  Type: enum('credit','debit')
+  Null: NO
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------
+Field: transaction_date
+  Type: timestamp
+  Null: YES
+  Key: 
+  Default: CURRENT_TIMESTAMP
+  Extra: DEFAULT_GENERATED
+--------------------------------------------------
+Field: description
+  Type: text
+  Null: YES
+  Key: 
+  Default: null
+  Extra: 
+--------------------------------------------------

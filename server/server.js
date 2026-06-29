@@ -4,14 +4,62 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const db = require("./dbs.js");
 const path = require('path');
-const multer = require('multer');  // ✅ Add this line to import multer
+const multer = require('multer');
 const fs = require('fs');
 const http = require('http');
 const socketIo = require('socket.io');
-const ioClient = require('socket.io-client'); // ✅ Import socket.io client
+const ioClient = require('socket.io-client');
 const { log } = require('console');
 const { close } = require('inspector/promises');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+const logger = require('./utils/logger');
+const { saveFcmToken, deleteFcmToken, sendPushNotification } = require('./utils/notifications.js');
 
+
+
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'Access denied. No token provided.' });
+  const token = authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Access denied. Invalid token format.' });
+  try {
+    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = verified;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token.' });
+  }
+};
+
+// Role-based authorization middleware
+const requireRole = (role) => {
+  return (req, res, next) => {
+    if (!req.user || req.user.role !== role) {
+      return res.status(403).json({ error: "Access denied. Forbidden role." });
+    }
+    next();
+  };
+};
+
+// Customer ownership check (for endpoints where the user acts on their own data)
+const requireCustomerOwnership = (req, res, next) => {
+  const customerId = req.params.customer_id || req.params.id || req.query.customer_id || req.body.customer_id;
+  if (customerId && parseInt(customerId) !== parseInt(req.user.user_id)) {
+    return res.status(403).json({ error: "Forbidden. You do not own this resource." });
+  }
+  next();
+};
+
+// Vendor ownership check
+const requireVendorOwnership = (req, res, next) => {
+  const vendorId = req.params.vendor_id || req.params.vendorId || req.params.id || req.query.vendor_id || req.query.vendorId || req.body.vendor_id || req.body.vendorId;
+  if (vendorId && parseInt(vendorId) !== parseInt(req.user.user_id)) {
+    return res.status(403).json({ error: "Forbidden. You do not own this resource." });
+  }
+  next();
+};
 
 
 const app = express();
@@ -24,76 +72,52 @@ const io = socketIo(server, {
   }
 });
 global.io = io;
-io.on("connection", (socket) => {
-  console.log(`🔌 New vendor connected: ${socket.id}`);
-
-  // ✅ Handle Order Acceptance
-  socket.on("acceptOrder", (data) => {
-    console.log("✅ Order Accepted:", data);
-
-    if (!data.order_id || !data.vendor_id) {
-      console.log("❌ Error: Missing order_id or vendor_id in acceptOrder event");
-      return;
-    }
-
-    // ✅ Update order status in DB
-    db.query("UPDATE orders SET order_status = 'accepted' WHERE order_id = ?", [data.order_id], (err) => {
-      if (err) {
-        console.error("❌ Error updating order status:", err);
-        return;
-      }
-
-      // ✅ Broadcast order update to Customer & Vendor
-      const updateData = {
-        order_id: data.order_id,
-        status: "Accepted",
-        vendor_id: data.vendor_id,
-        customer_id: data.customer_id,
-      };
-
-      io.emit(`customer-${data.customer_id}-order-updated`, updateData);
-      io.emit(`vendor-${data.vendor_id}-order-updated`, updateData);
-    });
-  });
-
-  // ✅ Handle Order Rejection
-  socket.on("rejectOrder", (data) => {
-    console.log("❌ Order Rejected:", data);
-
-    if (!data.order_id || !data.vendor_id) {
-      console.log("❌ Error: Missing order_id or vendor_id in rejectOrder event");
-      return;
-    }
-
-    // ✅ Update order status in DB
-    db.query("UPDATE orders SET order_status = 'Rejected' WHERE order_id = ?", [data.order_id], (err) => {
-      if (err) {
-        console.error("❌ Error updating order status:", err);
-        return;
-      }
-
-      // ✅ Broadcast order update to Customer & Vendor
-      const updateData = {
-        order_id: data.order_id,
-        status: "Rejected",
-        vendor_id: data.vendor_id,
-        customer_id: data.customer_id,
-      };
-
-      io.emit(`customer-${data.customer_id}-order-updated`, updateData);
-      io.emit(`vendor-${data.vendor_id}-order-updated`, updateData);
-    });
-  });
-
-  // ✅ Handle Disconnections
-  socket.on("disconnect", () => {
-    console.log(`❌ Vendor disconnected: ${socket.id}`);
-  });
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    logger.warn("Socket connection rejected: No token provided");
+    return next(new Error("Authentication error"));
+  }
+  try {
+    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = verified;
+    next();
+  } catch (err) {
+    logger.warn("Socket connection rejected: Invalid token");
+    return next(new Error("Authentication error"));
+  }
 });
 
+io.on("connection", (socket) => {
+  logger.info(`A user connected: ${socket.id}`);
 
+  socket.on("join", (data) => {
+    if (!data || !data.role || !data.user_id) return;
+    const expectedRoom = `${data.role}_${data.user_id}`;
+    if (data.room === expectedRoom) socket.join(data.room);
+  });
 
+  socket.on("acceptOrder", (data) => {
+    if (!data.order_id || !data.vendor_id) return;
+    db.query("UPDATE orders SET order_status = 'accepted' WHERE order_id = ?", [data.order_id], (err) => {
+      if (err) return;
+      io.to(`vendor_${data.vendor_id}`).emit('order-updated', { order_id: data.order_id, status: "accepted" });
+      io.to(`customer_${data.customer_id}`).emit('order-updated', { order_id: data.order_id, status: "accepted" });
+      sendPushNotification(data.customer_id, 'customer', 'Order Accepted', `Your order #${data.order_id} has been accepted by the vendor.`, 'Order Accepted', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
+    });
+  });
 
+  socket.on("rejectOrder", (data) => {
+    if (!data.order_id || !data.vendor_id) return;
+    db.query("UPDATE orders SET order_status = 'Rejected' WHERE order_id = ?", [data.order_id], (err) => {
+      if (err) return;
+      io.to(`vendor_${data.vendor_id}`).emit('order-updated', { order_id: data.order_id, status: "rejected" });
+      io.to(`customer_${data.customer_id}`).emit('order-updated', { order_id: data.order_id, status: "rejected" });
+      sendPushNotification(data.customer_id, 'customer', 'Order Rejected', `Your order #${data.order_id} has been rejected by the vendor.`, 'Order Rejected', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
+    });
+  });
+  socket.on("disconnect", () => {});
+});
 
 // for IMAGE STORE
 app.use(express.urlencoded({ extended: true }));
@@ -145,140 +169,264 @@ app.get('/api/v1/food', (req, res) => {
 
 
 // vendor & customers registration
-app.post('/api/v1/set-data', (req, res) => {
+app.post('/api/v1/set-data', async (req, res) => {
   const { username, Name, Phone, password, selectedOption, customer_address } = req.body;
+  if (!username || !Name || !Phone || !password || !selectedOption) return res.status(400).json({ error: 'All fields are required' });
 
-  const table = selectedOption === 'customer' ? 'customers' : 'vendor';
-
-  // ✅ 1️⃣ Check if username or phone already exists
-  const checkQuery = `SELECT * FROM ${table} WHERE username = ? OR Phone = ?`;
-
-  db.query(checkQuery, [username, Phone], (err, results) => {
-    if (err) {
-      return res.status(500).json({ message: "Database error", error: err.message });
+  if (password.length < 8 || password.length > 128) {
+    return res.status(400).json({ error: 'Password must be between 8 and 128 characters long.' });
+  }
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  if (!hasLetter || !hasNumber) {
+    return res.status(400).json({ error: 'Password must contain at least one letter and one number.' });
+  }
+  const table = selectedOption === 'customer' ? 'customer' : 'vendor';
+  db.query(`SELECT * FROM ${table} WHERE username = ? OR Phone = ?`, [username, Phone], async (err, results) => {
+    if (results && results.length > 0) {
+      if (results.some(user => user.username === username)) return res.status(400).json({ message: "Username already exists!" });
+      if (results.some(user => user.Phone === Phone)) return res.status(400).json({ message: "Phone number already exists!" });
     }
-
-    if (results.length > 0) {
-      // ✅ 2️⃣ If username/phone exists, send a clear error message
-      if (results.some(user => user.username === username)) {
-        return res.status(400).json({ message: "Username already exists!" });
-      }
-      if (results.some(user => user.Phone === Phone)) {
-        return res.status(400).json({ message: "Phone number already exists!" });
-      }
-    }
-
-    // ✅ 3️⃣ If username & phone are unique, insert user
-    let query;
-    let queryParams = [username, Name, Phone, password, selectedOption];
-
+    const hashedPassword = await bcrypt.hash(password, 10);
+    let query, queryParams;
     if (selectedOption === 'customer') {
       query = `INSERT INTO ${table} (username, Name, Phone, password, selectedOption, customer_address) VALUES (?, ?, ?, ?, ?, ?)`;
-      queryParams.push(customer_address);
+      queryParams = [username, Name, Phone, hashedPassword, selectedOption, customer_address];
     } else {
       query = `INSERT INTO ${table} (username, Name, Phone, password, selectedOption) VALUES (?, ?, ?, ?, ?)`;
+      queryParams = [username, Name, Phone, hashedPassword, selectedOption];
     }
+    db.query(query, queryParams, async (err, result) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+      
+      const userId = result.insertId;
+      const role = selectedOption.toLowerCase();
+      const accessToken = jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
+      const refreshToken = jwt.sign({ user_id: userId, role }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+      const idField = role === 'vendor' ? 'vendor_id' : 'customer_id';
+      
+      db.query(`UPDATE ${table} SET refresh_token = ? WHERE ${idField} = ?`, [hashedRefreshToken, userId], (updErr) => {
+        if (updErr) console.error("Error updating refresh token on registration", updErr);
+      });
 
-    db.query(query, queryParams, (err, result) => {
-      if (err) {
-        return res.status(500).json({ message: "Database error", error: err.message });
-      }
-
-      res.json({
-        message: "User added successfully",
-        username: username,
-        customer_id: result.insertId
+      res.json({ 
+        success: true,
+        message: "User added successfully", 
+        username: username, 
+        user_id: userId,
+        customer_id: role === 'customer' ? userId : null,
+        vendor_id: role === 'vendor' ? userId : null,
+        role: role,
+        accessToken,
+        refreshToken
       });
     });
   });
 });
 
+// OTP send, verify, register mock endpoints
+app.post('/api/v1/otp/send', (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: "Phone number is required" });
+  console.log(`[MOCK OTP] Sending code 123456 to +91 ${phone}`);
+  res.json({ success: true, message: "OTP sent successfully" });
+});
 
+app.post('/api/v1/otp/verify', (req, res) => {
+  const { phone, otp } = req.body;
+  if (!phone || !otp) return res.status(400).json({ error: "Phone and OTP are required" });
+  
+  if (otp !== '123456') {
+    return res.status(400).json({ error: "Invalid verification code" });
+  }
 
+  // Check if customer exists
+  db.query("SELECT * FROM customer WHERE Phone = ? LIMIT 1", [phone], async (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Database error" });
+    }
 
+    if (results.length > 0) {
+      const customer = results[0];
+      const userId = customer.customer_id;
+      const role = 'customer';
+      const accessToken = jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
+      const refreshToken = jwt.sign({ user_id: userId, role }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+      
+      db.query("UPDATE customer SET refresh_token = ? WHERE customer_id = ?", [hashedRefreshToken, userId], (updErr) => {
+        if (updErr) console.error("Error updating refresh token", updErr);
+      });
+
+      res.json({
+        success: true,
+        isNewUser: false,
+        accessToken,
+        refreshToken,
+        role,
+        user_id: userId,
+        customer_id: userId
+      });
+    } else {
+      res.json({
+        success: true,
+        isNewUser: true
+      });
+    }
+  });
+});
+
+app.post('/api/v1/otp/register', async (req, res) => {
+  const { phone, name } = req.body;
+  if (!phone || !name) return res.status(400).json({ error: "Phone and Name are required" });
+
+  const username = `cust_${phone}`;
+  const dummyPassword = Math.random().toString(36).slice(-8) + "1a"; // Random letter + number password
+  const hashedPassword = await bcrypt.hash(dummyPassword, 10);
+
+  // Check if phone or username already exists
+  db.query("SELECT * FROM customer WHERE Phone = ? OR username = ?", [phone, username], (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Database error" });
+    }
+
+    if (results.length > 0) {
+      return res.status(400).json({ error: "Phone number or username already registered" });
+    }
+
+    const query = `INSERT INTO customer (username, Name, Phone, password, selectedOption) VALUES (?, ?, ?, ?, ?)`;
+    const queryParams = [username, name, phone, hashedPassword, 'customer'];
+
+    db.query(query, queryParams, async (insErr, result) => {
+      if (insErr) {
+        console.error(insErr);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      const userId = result.insertId;
+      const role = 'customer';
+      const accessToken = jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
+      const refreshToken = jwt.sign({ user_id: userId, role }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+
+      db.query("UPDATE customer SET refresh_token = ? WHERE customer_id = ?", [hashedRefreshToken, userId], (updErr) => {
+        if (updErr) console.error("Error updating refresh token", updErr);
+      });
+
+      res.json({
+        success: true,
+        accessToken,
+        refreshToken,
+        role,
+        user_id: userId,
+        customer_id: userId
+      });
+    });
+  });
+});
 
 // Login ----------->>>>>
 
 app.post('/api/v1/login', (req, res) => {
-  console.log('here....')
   const { username, password, role } = req.body;
-  console.log(username, password, role);
-
-  if (!username || !password || !role) {
-    return res.status(400).json({ error: 'All fields are required' });
-  }
-
-  const allowedRoles = { vendor: 'vendor', customer: 'customers' };
+  console.log(`[DEBUG LOGIN] Attempt: username="${username}", role="${role}", passwordLength=${password ? password.length : 0}`);
+  if (!username || !password || !role) return res.status(400).json({ error: 'All fields are required' });
+  const allowedRoles = { vendor: 'vendor', customer: 'customer' };
   const table = allowedRoles[role.toLowerCase()];
+  if (!table) return res.status(400).json({ error: 'Invalid role' });
 
-  if (!table) {
-    return res.status(400).json({ error: 'Invalid role specified' });
-  }
-
-  // Check if the username or phone number exists
-  const sql = `SELECT * FROM ${table} WHERE username = ? OR phone = ? LIMIT 1`;
-
-  db.query(sql, [username, username], (err, result) => {
-    if (err) {
-      console.error('Database Error:', err);
-      return res.status(500).json({ error: 'Internal Server Error' });
+  db.query(`SELECT * FROM ${table} WHERE username = ? OR phone = ? LIMIT 1`, [username, username], async (err, result) => {
+    if (err || !result || result.length === 0) {
+      console.log(`[DEBUG LOGIN] User not found: username="${username}" in table="${table}". Error:`, err);
+      return res.status(401).json({ success: false, message: 'Username or phone not found' });
     }
-
-    if (!result || result.length === 0) {
-      return res.status(401).json({ success: false, message: 'Username or phone number not found' });
-    }
-
     const dbUser = result[0];
+    let isMatch = false;
+    try { isMatch = await bcrypt.compare(password, dbUser.password); } catch (e) {}
+    console.log(`[DEBUG LOGIN] bcrypt.compare result for user "${username}": isMatch=${isMatch}`);
 
-    if (dbUser.password !== password) {
-      console.log('Password mismatch:', dbUser.password, password);
+    if (!isMatch) {
+      console.log(`[DEBUG LOGIN] Password mismatch for user "${username}"`);
       return res.status(401).json({ success: false, message: 'Incorrect password' });
     }
-
-    const customer_id = dbUser.customer_id;
-    const vendor_id = dbUser.vendor_id;
-
-    res.json({ success: true, message: 'Login successful', vendor_id, customer_id });
+    const userId = dbUser.customer_id || dbUser.vendor_id;
+    const accessToken = jwt.sign({ user_id: userId, role: role.toLowerCase() }, process.env.JWT_SECRET, { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ user_id: userId, role: role.toLowerCase() }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    const idField = role.toLowerCase() === 'vendor' ? 'vendor_id' : 'customer_id';
+    db.query(`UPDATE ${table} SET refresh_token = ? WHERE ${idField} = ?`, [hashedRefreshToken, userId]);
+    res.json({ success: true, message: 'Login successful', user_id: userId, role: role.toLowerCase(), customer_id: dbUser.customer_id, vendor_id: dbUser.vendor_id, accessToken, refreshToken });
   });
 });
 
-
-
 // update vendor
-app.post('/api/v1/add-vendor', (req, res) => {
-  const { Shop_name, shop_address, username, open_close_timings } = req.body;
+app.post('/api/v1/add-vendor', verifyToken, requireRole('vendor'), (req, res) => {
+  const { 
+    Shop_name, 
+    shop_address, 
+    open_close_timings,
+    shop_number,
+    landmark,
+    pocket,
+    sector,
+    city,
+    state,
+    structured_address,
+    latitude,
+    longitude
+  } = req.body;
+  const vendor_id = req.user.user_id;
 
-  // Convert JSON string to valid MySQL JSON format
   let timingsJSON;
   try {
-    timingsJSON = JSON.stringify(open_close_timings);
+    timingsJSON = typeof open_close_timings === 'string' ? open_close_timings : JSON.stringify(open_close_timings);
   } catch (error) {
     return res.status(400).json({ error: "Invalid JSON format for open_close_timings" });
   }
 
-  // ✅ Update vendor details and store timings
-  const updateQuery = `UPDATE vendor SET Shop_name=?, shop_address=?, open_close_timings=? WHERE username=?`;
+  // ✅ Update vendor details and store timings using authenticated vendor_id
+  const updateQuery = `
+    UPDATE vendor 
+    SET Shop_name=?, 
+        shop_address=?, 
+        open_close_timings=?,
+        shop_number=?,
+        landmark=?,
+        pocket=?,
+        sector=?,
+        city=?,
+        state=?,
+        structured_address=?,
+        latitude=?,
+        longitude=?
+    WHERE vendor_id=?
+  `;
 
-  db.query(updateQuery, [Shop_name, shop_address, timingsJSON, username], (err, result) => {
+  const params = [
+    Shop_name, 
+    shop_address, 
+    timingsJSON,
+    shop_number || null,
+    landmark || null,
+    pocket || null,
+    sector || null,
+    city || null,
+    state || null,
+    structured_address ? (typeof structured_address === 'string' ? structured_address : JSON.stringify(structured_address)) : null,
+    latitude || null,
+    longitude || null,
+    vendor_id
+  ];
+
+  db.query(updateQuery, params, (err, result) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
 
-    // ✅ Fetch the vendor_id after update
-    const fetchVendorIdQuery = `SELECT vendor_id FROM vendor WHERE username=?`;
-
-    db.query(fetchVendorIdQuery, [username], (err, rows) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-
-      if (rows.length > 0) {
-        const vendor_id = rows[0].vendor_id;
-        res.status(201).json({ message: 'Vendor updated successfully!', vendor_id });
-      } else {
-        res.status(404).json({ error: 'Vendor not found' });
-      }
-    });
+    res.status(201).json({ message: 'Vendor updated successfully!', vendor_id });
   });
 });
 
@@ -286,15 +434,16 @@ app.post('/api/v1/add-vendor', (req, res) => {
 
 
 // add-food
-app.post('/api/v1/food-set', upload.single('food_img'), (req, res) => {
-  const { food_name, cost, food_type, food_description, vendor_id } = req.body;
+app.post('/api/v1/food-set', verifyToken, requireRole('vendor'), upload.single('food_img'), (req, res) => {
+  const { food_name, cost, food_type, food_description } = req.body;
+  const vendor_id = req.user.user_id;
   const food_img = req.file ? `${req.file.filename}` : null; // ✅ Store image path
-  if (!food_name || !cost || !food_img) {
+  if (!food_name || !cost) {
     return res.status(400).json({ message: 'All fields are required' });
   }
 
-  const sql = `INSERT INTO food (food_name, cost, food_img, food_type,food_description,vendor_id) VALUES ('${food_name}', ${cost},'${food_img}','${food_type}','${food_description}',${vendor_id})`;
-  db.query(sql, (err, result) => {
+  const sql = `INSERT INTO food (food_name, cost, food_img, food_type,food_description,vendor_id) VALUES (?, ?, ?, ?, ?, ?)`;
+  db.query(sql, [food_name, cost, food_img, food_type, food_description, vendor_id], (err, result) => {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).json({ message: 'Database error' });
@@ -304,65 +453,108 @@ app.post('/api/v1/food-set', upload.single('food_img'), (req, res) => {
   });
 });
 
-// EDIT FOOD---->>>>>
-app.post('/api/v1/food-update', upload.single('food_img'), (req, res) => {
-  const { food_id, food_name, cost, food_type, food_description, } = req.body;
+// Helper to verify that a food item belongs to the authenticated vendor
+const verifyFoodOwnership = (food_id, vendor_id, callback) => {
+  db.query("SELECT vendor_id FROM food WHERE food_id = ?", [food_id], (err, results) => {
+    if (err) return callback(err, null);
+    if (results.length === 0) return callback(null, false);
+    const belongs = parseInt(results[0].vendor_id) === parseInt(vendor_id);
+    callback(null, belongs);
+  });
+};
+
+// Helper for food update logic
+const handleFoodUpdate = (req, res) => {
+  const { food_id, food_name, cost, food_type, food_description } = req.body;
   const food_img = req.file ? `${req.file.filename}` : null;
-  if (!food_id || !food_name || !cost || !food_img) {
+
+  if (!food_id || !food_name || !cost) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
-  const sql = "UPDATE food SET food_name = ?, cost = ?, food_img = ? food_type=?,food_description=?, WHERE food_id = ?";
-  const values = [food_name, cost, food_img, food_id, food_type, food_description,];
-
-  db.query(sql, values, (err, result) => {
-    if (err) {
-      console.error("Update Error:", err);
-      return res.status(500).json({ message: "Database update failed" });
+  // Verify that the food item belongs to the logged-in vendor
+  verifyFoodOwnership(food_id, req.user.user_id, (err, owns) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (!owns) {
+      return res.status(403).json({ error: "Forbidden. You do not own this food item." });
     }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Food item not found" });
+    let sql;
+    let values;
+
+    if (food_img) {
+      sql = "UPDATE food SET food_name = ?, cost = ?, food_img = ?, food_type = ?, food_description = ? WHERE food_id = ?";
+      values = [food_name, parseFloat(cost), food_img, food_type, food_description, food_id];
+    } else {
+      sql = "UPDATE food SET food_name = ?, cost = ?, food_type = ?, food_description = ? WHERE food_id = ?";
+      values = [food_name, parseFloat(cost), food_type, food_description, food_id];
     }
 
-    res.json({ message: "Food item updated successfully!" });
+    db.query(sql, values, (err, result) => {
+      if (err) {
+        console.error("Update Error:", err);
+        return res.status(500).json({ message: "Database update failed" });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Food item not found" });
+      }
+
+      res.json({ message: "Food item updated successfully!" });
+    });
   });
-})
+};
 
-
+// EDIT FOOD---->>>>>
+app.post('/api/v1/food-update', verifyToken, requireRole('vendor'), upload.single('food_img'), handleFoodUpdate);
+app.put('/api/v1/food-update', verifyToken, requireRole('vendor'), upload.single('food_img'), handleFoodUpdate);
 
 // Delete Food---->>>>
-app.use('/api/v1/food-delete', (req, res) => {
+const handleFoodDelete = (req, res) => {
   const { food_id, food_img } = req.body;
 
-  if (!food_id || !food_img) {
+  if (!food_id) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
-  // Delete food item from database
-  const sql = "DELETE FROM food WHERE food_id = ?";
-
-  db.query(sql, [food_id], (err, result) => {
-    if (err) {
-      console.error("Delete Error:", err);
-      return res.status(500).json({ message: "Database delete failed" });
+  // Verify that the food item belongs to the logged-in vendor
+  verifyFoodOwnership(food_id, req.user.user_id, (err, owns) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (!owns) {
+      return res.status(403).json({ error: "Forbidden. You do not own this food item." });
     }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Food item not found" });
-    }
+    // Delete food item from database
+    const sql = "DELETE FROM food WHERE food_id = ?";
 
-    // Delete image from server
-    const imagePath = path.join(__dirname, '../image/', food_img);
-    fs.unlink(imagePath, (err) => {
+    db.query(sql, [food_id], (err, result) => {
       if (err) {
-        console.error("Image Delete Error:", err);
+        console.error("Delete Error:", err);
+        return res.status(500).json({ message: "Database delete failed" });
       }
-    });
 
-    res.json({ message: "Food item deleted successfully!" });
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Food item not found" });
+      }
+
+      // Delete image from server if provided
+      if (food_img) {
+        const imagePath = path.join(__dirname, '../image/', food_img);
+        fs.unlink(imagePath, (err) => {
+          if (err) {
+            console.error("Image Delete Error:", err);
+          }
+        });
+      }
+
+      res.json({ message: "Food item deleted successfully!" });
+    });
   });
-})
+};
+
+app.delete('/api/v1/food-delete', verifyToken, requireRole('vendor'), handleFoodDelete);
+app.post('/api/v1/food-delete', verifyToken, requireRole('vendor'), handleFoodDelete);
+app.use('/api/v1/food-delete', verifyToken, requireRole('vendor'), handleFoodDelete);
 
 
 // ------->>>>>>>>fetch all vendors
@@ -373,6 +565,8 @@ app.get('/api/v1/vendors', (req, res) => {
       v.Shop_name, 
       v.shop_address, 
       v.is_online,
+      GROUP_CONCAT(DISTINCT f.food_name ORDER BY f.food_name SEPARATOR ', ') AS food_names,
+      GROUP_CONCAT(DISTINCT f.food_description ORDER BY f.food_description SEPARATOR ' | ') AS food_descriptions,
       GROUP_CONCAT(DISTINCT f.food_type ORDER BY f.food_type SEPARATOR ', ') AS food_types, 
       GROUP_CONCAT(DISTINCT f.food_img ORDER BY f.food_img SEPARATOR ', ') AS food_images
     FROM vendor v
@@ -390,187 +584,214 @@ app.get('/api/v1/vendors', (req, res) => {
 
 // ====>>>> orders table
 // Place an order
-app.post('/api/v1/orders', (req, res) => {
-  const { customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, items } = req.body;
+app.post('/api/v1/orders', verifyToken, requireRole('customer'), (req, res) => {
+  const { vendor_id, total_cost, customers_location, customers_contact, payment_methods, items, receiver_name, receiver_phone } = req.body;
+  const customer_id = req.user.user_id;
 
   if (!customer_id || !vendor_id || !total_cost || !customers_location || !customers_contact || !payment_methods || !items || items.length === 0) {
     return res.status(400).json({ error: 'All fields are required, and items cannot be empty' });
   }
 
-  db.beginTransaction((transactionError) => {
-    if (transactionError) {
-      console.error('Transaction Error:', transactionError);
-      return res.status(500).json({ error: 'Failed to start transaction' });
-    }
+  // Check if Udar is Allowed (Udar Check) if payment method is credit
+  if (payment_methods === 'credit') {
+    const checkUdarQuery = "SELECT * FROM account WHERE customer_id = ? AND vendor_id = ?";
+    db.query(checkUdarQuery, [customer_id, vendor_id], (udarErr, udarResult) => {
+      if (udarErr) {
+        console.error('Error checking Udar:', udarErr);
+        return res.status(500).json({ error: 'Failed to verify account' });
+      }
+      
+      // We still proceed even if not approved (as per original logic where it warning logs)
+      if (udarResult.length === 0) {
+        console.warn('Udar is not approved, but adding credit order.');
+      }
+      executeOrderTransaction();
+    });
+  } else {
+    executeOrderTransaction();
+  }
 
-    // ✅ Step 1: Get Customer Name from Customers Table
-    const customerQuery = `SELECT Name FROM customers WHERE customer_id = ?`;
-
-    db.query(customerQuery, [customer_id], (customerErr, customerResult) => {
-      if (customerErr) {
-        console.error('Error fetching customer name:', customerErr);
-        return db.rollback(() => res.status(500).json({ error: 'Failed to fetch customer name' }));
+  function executeOrderTransaction() {
+    db.getConnection((connErr, connection) => {
+      if (connErr) {
+        console.error('Error getting connection from pool:', connErr);
+        return res.status(500).json({ error: 'Failed to establish database connection for order' });
       }
 
-      if (customerResult.length === 0) {
-        return db.rollback(() => res.status(404).json({ error: 'Customer not found' }));
-      }
+      connection.beginTransaction((transactionError) => {
+        if (transactionError) {
+          console.error('Transaction Error:', transactionError);
+          connection.release();
+          return res.status(500).json({ error: 'Failed to start transaction' });
+        }
 
-      const customerName = customerResult[0].Name; // ✅ Store the customer name
+        // ✅ Step 1: Get Customer Name FROM customer Table
+        const customerQuery = `SELECT Name FROM customer WHERE customer_id = ?`;
 
-      // ✅ Step 2: Insert Order into `orders` Table
-      function insertOrder() {
-        const orderQuery = `
-          INSERT INTO orders 
-            (customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods) 
-          VALUES (?, ?, ?, ?, ?, ?)
-        `;
-
-        db.query(orderQuery, [customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods], (orderErr, orderResult) => {
-          if (orderErr) {
-            console.error('Error inserting into orders:', orderErr);
-            return db.rollback(() => res.status(500).json({ error: 'Failed to place order' }));
+        connection.query(customerQuery, [customer_id], (customerErr, customerResult) => {
+          if (customerErr) {
+            console.error('Error fetching customer name:', customerErr);
+            return connection.rollback(() => {
+              connection.release();
+              res.status(500).json({ error: 'Failed to fetch customer name' });
+            });
           }
 
-          const order_id = orderResult.insertId;
-          const orderDateTime = new Date(); // Capture current timestamp
+          if (customerResult.length === 0) {
+            return connection.rollback(() => {
+              connection.release();
+              res.status(404).json({ error: 'Customer not found' });
+            });
+          }
 
-          // ✅ Step 3: Insert Order Items into `order_items` Table
-          const orderItemsQuery = `
-            INSERT INTO order_items (order_id, food_id, food_name, quantity, item_total)
-            VALUES ?
+          const customerName = customerResult[0].Name; // ✅ Store the customer name
+
+          // ✅ Step 2: Insert Order into `orders` Table
+          const orderQuery = `
+            INSERT INTO orders 
+              (customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, receiver_name, receiver_phone) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           `;
 
-          const orderItemsData = items.map(item => [
-            order_id,
-            item.food_id,
-            item.food_name,
-            Number(item.quantity) || 0,
-            (Number(item.quantity) || 0) * (Number(item.cost) || 0) // Ensure valid number calculations
-          ]);
-
-          db.query(orderItemsQuery, [orderItemsData], (itemsErr) => {
-            if (itemsErr) {
-              console.error('Error inserting into order_items:', itemsErr);
-              return db.rollback(() => res.status(500).json({ error: 'Failed to add order items' }));
+          connection.query(orderQuery, [
+            customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, 
+            receiver_name || null, receiver_phone || null
+          ], (orderErr, orderResult) => {
+            if (orderErr) {
+              console.error('Error inserting into orders:', orderErr);
+              return connection.rollback(() => {
+                connection.release();
+                res.status(500).json({ error: 'Failed to place order' });
+              });
             }
 
-            // ✅ Step 4: Handle Payment Method
-            if (payment_methods === 'credit') {
-              insertIntoAccount(order_id, orderDateTime, customerName); // ✅ Pass customerName
-            } else {
-              finalizeOrder(order_id);
+            const order_id = orderResult.insertId;
+            const orderDateTime = new Date(); // Capture current timestamp
+
+            // ✅ Step 3: Insert Order Items into `order_items` Table
+            const orderItemsQuery = `
+              INSERT INTO order_items (order_id, food_id, food_name, quantity, item_total)
+              VALUES ?
+            `;
+
+            const orderItemsData = items.map(item => [
+              order_id,
+              item.food_id,
+              item.food_name,
+              Number(item.quantity) || 0,
+              (Number(item.quantity) || 0) * (Number(item.cost) || 0) // Ensure valid number calculations
+            ]);
+
+            connection.query(orderItemsQuery, [orderItemsData], (itemsErr) => {
+              if (itemsErr) {
+                console.error('Error inserting into order_items:', itemsErr);
+                return connection.rollback(() => {
+                  connection.release();
+                  res.status(500).json({ error: 'Failed to add order items' });
+                });
+              }
+
+              // ✅ Step 4: Handle Payment Method
+              if (payment_methods === 'credit') {
+                insertIntoAccount(order_id, orderDateTime, customerName);
+              } else {
+                finalizeOrder(order_id);
+              }
+            });
+
+            // ✅ Step 5: Insert into Account Table if Payment is Credit
+            function insertIntoAccount(order_id, orderDateTime, customerName) {
+              const insertAccountQuery = `
+                INSERT INTO account 
+                  (vendor_id, customer_id, order_id, customer_name, food_name, quantity, cost, 
+                  order_date_time, debit_value_vendor, credit_value_vendor, debit_customer, credit_customer, 
+                  balance_due, payment_method, payment_status, payment_date_time, created_at)
+                VALUES ?
+              `;
+
+              const paymentStatus = 'pending'; // Default status for credit orders
+              const paymentDateTime = null; // No payment yet
+
+              const accountValues = items.map(item => {
+                const quantity = Number(item.quantity) || 0;
+                const cost = Number(item.cost) || 0;
+                const itemTotal = quantity * cost;
+
+                return [
+                  vendor_id,
+                  customer_id,
+                  order_id,
+                  customerName,
+                  item.food_name,
+                  quantity,
+                  cost,
+                  orderDateTime, // order_date_time
+                  itemTotal, // debit_value_vendor
+                  0, // credit_value_vendor
+                  0, // debit_customer
+                  itemTotal, // credit_customer
+                  itemTotal, // balance_due
+                  payment_methods,
+                  paymentStatus,
+                  paymentDateTime,
+                  new Date() // created_at
+                ];
+              });
+
+              connection.query(insertAccountQuery, [accountValues], (accountErr) => {
+                if (accountErr) {
+                  console.error('Error inserting into account:', accountErr);
+                  return connection.rollback(() => {
+                    connection.release();
+                    res.status(500).json({ error: 'Failed to update account table' });
+                  });
+                }
+                finalizeOrder(order_id);
+              });
+            }
+
+            // ✅ Step 6: Commit the Transaction
+            function finalizeOrder(order_id) {
+              connection.commit((commitErr) => {
+                if (commitErr) {
+                  console.error("Transaction Commit Error:", commitErr);
+                  return connection.rollback(() => {
+                    connection.release();
+                    res.status(500).json({ error: 'Failed to finalize order' });
+                  });
+                }
+            
+                connection.release();
+                console.log("✅ Order committed to DB, now emitting WebSocket event...");
+            
+                // ✅ Emit FCM and Socket events for real-time order update AFTER commit
+                sendPushNotification(vendor_id, 'vendor', 'New Order Received', `You have received a new order of ₹${total_cost}.`, 'New Order', 'PendingOrder').catch(e => console.error('FCM error:', e));
+                io.to(`vendor_${vendor_id}`).emit('new-order', {
+                  order_id,
+                  vendor_id,
+                  total_cost,
+                  customer_id,
+                  customers_location,
+                  customers_contact,
+                  payment_methods
+                });
+            
+                res.json({ message: 'Order placed successfully', order_id });
+              });
             }
           });
         });
-      }
-
-      // ✅ Step 5: Insert into Account Table if Payment is Credit
-      function insertIntoAccount(order_id, orderDateTime, customerName) {
-        const insertAccountQuery = `
-          INSERT INTO account 
-            (vendor_id, customer_id, order_id, customer_name, food_name, quantity, cost, 
-            order_date_time, debit_value_vendor, credit_value_vendor, debit_customer, credit_customer, 
-            balance_due, payment_method, payment_status, payment_date_time, created_at)
-          VALUES ?
-        `;
-
-        const paymentStatus = 'pending'; // Default status for credit orders
-        const paymentDateTime = null; // No payment yet
-
-        const accountValues = items.map(item => {
-          const quantity = Number(item.quantity) || 0;
-          const cost = Number(item.cost) || 0;
-          const itemTotal = quantity * cost;
-
-          return [
-            vendor_id,
-            customer_id,
-            order_id,
-            customerName, // ✅ Pass fetched customer name here
-            item.food_name,
-            quantity,
-            cost,
-            orderDateTime, // order_date_time
-            itemTotal, // debit_value_vendor (not applicable here)
-            0, // credit_value_vendor (vendor is credited)
-            0, // debit_customer (not applicable here)
-            itemTotal, // credit_customer (customer is taking credit)
-            itemTotal, // balance_due (full amount remains due)
-            payment_methods,
-            paymentStatus,
-            paymentDateTime, // No payment done yet
-            new Date() // created_at timestamp
-          ];
-        });
-
-        db.query(insertAccountQuery, [accountValues], (accountErr) => {
-          if (accountErr) {
-            console.error('Error inserting into account:', accountErr);
-            return db.rollback(() => res.status(500).json({ error: 'Failed to update account table' }));
-          }
-          finalizeOrder(order_id);
-        });
-      }
-
-      // ✅ Step 6: Commit the Transaction
-      function finalizeOrder(order_id) {
-        db.commit((commitErr) => {
-          if (commitErr) {
-            console.error("Transaction Commit Error:", commitErr);
-            return db.rollback(() => res.status(500).json({ error: 'Failed to finalize order' }));
-          }
-      
-          console.log("✅ Order committed to DB, now emitting WebSocket event...");
-      
-          // ✅ Emit WebSocket event for real-time order update AFTER commit
-          io.emit(`vendor-${vendor_id}-new-order`, {
-            order_id,
-            vendor_id,
-            total_cost,
-            customer_id,
-            customers_location,
-            customers_contact,
-            payment_methods
-          });
-      
-          res.json({ message: 'Order placed successfully', order_id });
-        });
-      }
-      
-
-
-      // ✅ Step 7: Check if Credit is Allowed (Udar Check)
-      if (payment_methods === 'credit') {
-        const checkUdarQuery = "SELECT * FROM account WHERE customer_id = ? AND vendor_id = ?";
-
-        db.query(checkUdarQuery, [customer_id, vendor_id], (udarErr, udarResult) => {
-          if (udarErr) {
-            console.error('Error checking Udar:', udarErr);
-            return db.rollback(() => res.status(500).json({ error: 'Failed to verify account' }));
-          }
-
-          if (udarResult.length === 0) {
-            console.warn('Udar is not approved, but adding credit order.');
-          }
-
-          // ✅ Insert order after Udar check
-          insertOrder();
-        });
-      } else {
-        insertOrder();
-      }
+      });
     });
-  });
+  }
 });
 
 
 
 
 //  fetch all orders
-app.get("/api/v1/vendor/orders", (req, res) => {
-  const { vendor_id } = req.query;
-  if (!vendor_id) return res.status(400).json({ error: "Vendor ID is required" });
+app.get('/api/v1/vendor/orders', verifyToken, requireRole('vendor'), (req, res) => {
+  const vendor_id = req.user.user_id;
 
   const query = `
     SELECT o.order_id, o.customers_location, o.customers_contact, o.total_cost, 
@@ -581,7 +802,7 @@ app.get("/api/v1/vendor/orders", (req, res) => {
              ), '[]'
            ) AS food_items
     FROM orders o
-    JOIN customers c ON o.customer_id = c.customer_id
+    JOIN customer c ON o.customer_id = c.customer_id
     LEFT JOIN order_items oi ON o.order_id = oi.order_id  -- Use LEFT JOIN to include orders without items
     WHERE o.vendor_id = ? AND o.order_status = 'pending'
     GROUP BY o.order_id;
@@ -601,45 +822,13 @@ app.get("/api/v1/vendor/orders", (req, res) => {
 });
 
 
-// 📌 Accept Order
-// app.put("/api/v1/vendor/orders/accept", (req, res) => {
-//   const { order_id, vendor_id } = req.body;e
-//   if (!order_id || !vendor_id) return res.status(400).json({ error: "Order ID and Vendor ID are required" });
 
-//   const query = `UPDATE orders SET order_status = 'accepted' WHERE order_id = ? AND vendor_id = ?`;
-
-//   db.query(query, [order_id, vendor_id], (err, result) => {
-//     if (err) return res.status(500).json({ error: err.message });
-
-//     io.emit(`vendor-${vendor_id}-order-updated`, { order_id, order_status: "accepted" });
-//     res.json({ message: "Order Accepted Successfully" });
-//   });
-// });
-
-// 📌 Reject Order
-// app.put("/api/v1/vendor/orders/reject", (req, res) => {
-//   const { order_id, vendor_id } = req.body;
-//   if (!order_id || !vendor_id) return res.status(400).json({ error: "Order ID and Vendor ID are required" });
-
-//   const query = `UPDATE orders SET order_status = 'rejected' WHERE order_id = ? AND vendor_id = ?`;
-
-//   db.query(query, [order_id, vendor_id], (err, result) => {
-//     if (err) return res.status(500).json({ error: err.message });
-
-//     io.emit(`vendor-${vendor_id}-order-updated`, { order_id, order_status: "rejected" });
-//     res.json({ message: "Order Rejected Successfully" });
-//   });
-// });
 
 // for fetch orders for customer
-app.get('/api/v1/customer/orders/new', async (req, res) => {
+// for fetch orders for customer
+app.get('/api/v1/customer/orders/new', verifyToken, requireRole('customer'), async (req, res) => {
   try {
-    const customer_id = req.query.customer_id;
-    console.log("Received customer_id:", customer_id);
-
-    if (!customer_id) {
-      return res.status(400).json({ error: "Customer ID is required" });
-    }
+    const customer_id = req.user.user_id;
 
     // ✅ Fetch ALL orders, no matter their status
     const query = `
@@ -647,11 +836,13 @@ app.get('/api/v1/customer/orders/new', async (req, res) => {
           o.order_id, o.customer_id, o.vendor_id, 
           oi.food_name, oi.quantity, 
           o.total_cost, o.order_status, 
-          v.shop_name, o.customers_location, o.customers_contact
+          v.shop_name, o.customers_location, o.customers_contact,
+          (r.review_id IS NOT NULL) AS has_review
       FROM orders o
       JOIN vendor v ON o.vendor_id = v.vendor_id
-      JOIN customers c ON o.customer_id = c.customer_id
+      JOIN customer c ON o.customer_id = c.customer_id
       JOIN order_items oi ON o.order_id = oi.order_id
+      LEFT JOIN order_reviews r ON o.order_id = r.order_id
       WHERE o.customer_id = ?;
     `;
 
@@ -669,12 +860,50 @@ app.get('/api/v1/customer/orders/new', async (req, res) => {
   }
 });
 
+// Save Order Review
+app.post('/api/v1/reviews', verifyToken, requireRole('customer'), (req, res) => {
+  const customer_id = req.user.user_id;
+  const { order_id, rating, review_text, delivery_success } = req.body;
+
+  if (!order_id || rating === undefined) {
+    return res.status(400).json({ error: "Order ID and rating are required" });
+  }
+
+  const rat = parseInt(rating);
+  if (isNaN(rat) || rat < 1 || rat > 5) {
+    return res.status(400).json({ error: "Rating must be between 1 and 5" });
+  }
+
+  const delSuccess = delivery_success ? 1 : 0;
+
+  const insertQuery = `
+    INSERT INTO order_reviews (order_id, customer_id, rating, review_text, delivery_success)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+  db.query(insertQuery, [order_id, customer_id, rat, review_text || null, delSuccess], (err, result) => {
+    if (err) {
+      console.error("Error saving review:", err);
+      return res.status(500).json({ error: "Database error" });
+    }
+    res.json({ success: true, message: "Review saved successfully", review_id: result.insertId });
+  });
+});
+
 
 
 // 📌 Fetch All Accepted Orders for a Vendor
-app.get("/api/v1/vendor/accepted-orders", (req, res) => {
-  const { vendor_id } = req.query;
-  if (!vendor_id) return res.status(400).json({ error: "Vendor ID is required" });
+app.get('/api/v1/vendor/accepted-orders', verifyToken, requireRole('vendor'), (req, res) => {
+  const vendor_id = req.user.user_id;
+  const { status } = req.query;
+
+  let statusFilter = "o.order_status IN ('accepted', 'preparing', 'ready', 'out for delivery')";
+  if (status === 'delivered') {
+    statusFilter = "o.order_status IN ('delivered', 'Rejected', 'rejected', 'cancelled')";
+  } else if (status === 'pending') {
+    statusFilter = "o.order_status = 'pending'";
+  } else if (status === 'all') {
+    statusFilter = "o.order_status IN ('pending', 'accepted', 'preparing', 'ready', 'out for delivery', 'delivered', 'Rejected', 'rejected', 'cancelled')";
+  }
 
   const query = `
     SELECT o.order_id, o.customers_location, o.customers_contact, o.total_cost, 
@@ -685,9 +914,9 @@ app.get("/api/v1/vendor/accepted-orders", (req, res) => {
              ), '[]'
            ) AS food_items
     FROM orders o
-    JOIN customers c ON o.customer_id = c.customer_id
+    JOIN customer c ON o.customer_id = c.customer_id
     LEFT JOIN order_items oi ON o.order_id = oi.order_id
-    WHERE o.vendor_id = ? AND o.order_status IN ('accepted', 'preparing', 'ready', 'out for delivery')
+    WHERE o.vendor_id = ? AND ${statusFilter}
     GROUP BY o.order_id;
   `;
 
@@ -704,11 +933,50 @@ app.get("/api/v1/vendor/accepted-orders", (req, res) => {
 });
 
 // 📌 Update Order Status (Preparing → Ready → Out for Delivery)
-app.put('/api/v1/vendor/orders/update-status', (req, res) => {
-  const { order_id, vendor_id, customer_id, new_status } = req.body;
+app.put('/api/v1/vendor/orders/update-status', verifyToken, requireRole('vendor'), (req, res) => {
+  const { order_id, customer_id, new_status } = req.body;
+  const vendor_id = req.user.user_id;
 
-  // Update the order status in the database
-  db.query("UPDATE orders SET order_status = ? WHERE order_id = ?", [new_status, order_id], (err, result) => {
+  // Verify that the order belongs to the logged-in vendor
+  db.query("SELECT vendor_id, order_status, customer_id FROM orders WHERE order_id = ?", [order_id], (err, results) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    if (results.length === 0) return res.status(404).json({ error: "Order not found" });
+    if (parseInt(results[0].vendor_id) !== parseInt(vendor_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this order." });
+    }
+
+    const currentStatus = results[0].order_status || 'pending';
+    const targetCustId = results[0].customer_id;
+
+    // Enforce sequence: accepted -> preparing -> ready -> delivered
+    if (new_status === 'Rejected' || new_status === 'rejected') {
+      if (currentStatus === 'delivered') {
+        return res.status(400).json({ error: "Cannot reject a delivered order" });
+      }
+    } else {
+      if (new_status === 'accepted') {
+        if (currentStatus !== 'placed' && currentStatus !== 'pending') {
+          return res.status(400).json({ error: "Order is already accepted or processed" });
+        }
+      } else if (new_status === 'preparing') {
+        if (currentStatus !== 'accepted') {
+          return res.status(400).json({ error: "Order must be accepted before preparing" });
+        }
+      } else if (new_status === 'ready') {
+        if (currentStatus !== 'preparing') {
+          return res.status(400).json({ error: "Order must be preparing before marking as ready/out for delivery" });
+        }
+      } else if (new_status === 'delivered') {
+        if (currentStatus !== 'ready') {
+          return res.status(400).json({ error: "Order must be ready/out for delivery before marking as delivered" });
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid status transition" });
+      }
+    }
+
+    // Update the order status in the database
+    db.query("UPDATE orders SET order_status = ? WHERE order_id = ?", [new_status, order_id], (err, result) => {
     if (err) {
       console.error("Error updating order status:", err);
       return res.status(500).json({ error: "Internal Server Error" });
@@ -722,19 +990,31 @@ app.put('/api/v1/vendor/orders/update-status', (req, res) => {
       status: new_status,
     };
 
-    // Emit the update event to the customer using Socket.io
-    io.emit(`customer-${customer_id}-order-updated`, updateData);
+    // Emit the update event to the customer and vendor rooms using Socket.io
+    io.to(`customer_${customer_id}`).emit('order-updated', updateData);
+    io.to(`vendor_${vendor_id}`).emit('order-updated', updateData);
+    if (new_status === 'accepted') {
+      sendPushNotification(customer_id, 'customer', 'Order Accepted', `Your order #${order_id} has been accepted.`, 'Order Accepted', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
+    } else if (new_status === 'Rejected' || new_status === 'rejected') {
+      sendPushNotification(customer_id, 'customer', 'Order Rejected', `Your order #${order_id} has been rejected.`, 'Order Rejected', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
+    } else if (new_status === 'delivered') {
+      sendPushNotification(customer_id, 'customer', 'Order Delivered', `Your order #${order_id} has been delivered!`, 'Order Delivered', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
+    } else if (new_status === 'cancelled') {
+      sendPushNotification(vendor_id, 'vendor', 'Order Cancelled', `Order #${order_id} has been cancelled.`, 'Order Cancelled', 'Orders').catch(e => console.error('FCM error:', e));
+    }
 
     res.json({ message: "Order status updated", update: updateData });
   });
+});
 });
 
 
 
 
 // ✅ Customer Requests Udar Account
-app.post("/api/v1/request-udar", (req, res) => {
-  const { customer_id, vendor_id } = req.body;
+app.post('/api/v1/request-udar', verifyToken, requireRole('customer'), (req, res) => {
+  const { vendor_id } = req.body;
+  const customer_id = req.user.user_id;
 
   if (!customer_id || !vendor_id) {
     return res.status(400).json({ message: "customer_id and vendor_id are required" });
@@ -764,7 +1044,7 @@ app.post("/api/v1/request-udar", (req, res) => {
     }
 
     // ✅ Step 2: Fetch Customer Name
-    const queryCustomer = "SELECT Name FROM customers WHERE customer_id = ?";
+    const queryCustomer = "SELECT Name FROM customer WHERE customer_id = ?";
 
     db.query(queryCustomer, [customer_id], (err, result) => {
       if (err) {
@@ -789,6 +1069,7 @@ app.post("/api/v1/request-udar", (req, res) => {
         }
 
         console.log("✅ Udar request successfully inserted");
+        sendPushNotification(vendor_id, 'vendor', 'Credit Request Received', `${customer_name} has requested an Udar (credit) account.`, 'Credit Request Received', 'UdarRequestsScreen').catch(e => console.error('FCM error:', e));
         res.json({ message: "Udar request sent successfully" });
       });
     });
@@ -799,30 +1080,48 @@ app.post("/api/v1/request-udar", (req, res) => {
 
 
 // ✅ Vendor Accepts Udar Request
-app.post("/api/v1/accept-udar", (req, res) => {
+app.post('/api/v1/accept-udar', verifyToken, requireRole('vendor'), (req, res) => {
   const { request_id } = req.body;
 
   if (!request_id) {
     return res.status(400).json({ message: "request_id is required" });
   }
 
-  console.log("Received request_id:", request_id);
-
-  // Update status to 'accepted' in udar_requests table
-  const updateQuery = `UPDATE udar_requests SET status = 'accepted' WHERE request_id = ?`;
-
-  db.query(updateQuery, [request_id], (err, result) => {
-    if (err) {
-      console.error("Database UPDATE error:", err);
-      return res.status(500).json({ message: "Database error", error: err });
+  // Verify that the request belongs to the logged-in vendor
+  db.query("SELECT vendor_id FROM udar_requests WHERE request_id = ?", [request_id], (err, results) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (results.length === 0) return res.status(404).json({ message: "Request not found" });
+    if (parseInt(results[0].vendor_id) !== parseInt(req.user.user_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this credit request." });
     }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Request not found or already accepted" });
-    }
+    console.log("Received request_id:", request_id);
 
-    console.log("Udar request accepted:", result);
-    res.json({ status: "accepted", message: "Udar request has been accepted" });
+    // Update status to 'accepted' in udar_requests table
+    const updateQuery = `UPDATE udar_requests SET status = 'accepted' WHERE request_id = ?`;
+
+    db.query(updateQuery, [request_id], (err, result) => {
+      if (err) {
+        console.error("Database UPDATE error:", err);
+        return res.status(500).json({ message: "Database error", error: err });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Request not found or already accepted" });
+      }
+
+      console.log("Udar request accepted:", result);
+      db.query('SELECT customer_id, vendor_id FROM udar_requests WHERE request_id = ?', [request_id], (sErr, sRes) => {
+        if (!sErr && sRes && sRes.length > 0) {
+          const { customer_id, vendor_id } = sRes[0];
+          db.query('SELECT Shop_name FROM vendor WHERE vendor_id = ?', [vendor_id], (vErr, vRes) => {
+            const sName = (!vErr && vRes && vRes.length > 0) ? vRes[0].Shop_name : 'Vendor';
+            sendPushNotification(customer_id, 'customer', 'Credit Request Approved', `Your Udar (credit) request has been approved by ${sName}.`, 'Credit Request Approved', 'MyUdarScreen').catch(e => console.error('FCM error:', e));
+          });
+        }
+      });
+      res.json({ status: "accepted", message: "Udar request has been accepted" });
+    });
   });
 });
 
@@ -830,7 +1129,7 @@ app.post("/api/v1/accept-udar", (req, res) => {
 
 
 // ✅ Add Purchase on Udar (Credit)
-app.get("/api/v1/customer-transactions/:customer_id", (req, res) => {
+app.get('/api/v1/customer-transactions/:customer_id', verifyToken, (req, res) => {
   const { customer_id } = req.params;
 
   // ✅ Check if customer_id is valid
@@ -838,39 +1137,66 @@ app.get("/api/v1/customer-transactions/:customer_id", (req, res) => {
     return res.status(400).json({ error: "Customer ID is required" });
   }
 
-  const query = `
+  const caller_id = req.user.user_id;
+  const caller_role = req.user.role;
+
+  if (caller_role === 'customer') {
+    if (parseInt(customer_id) !== parseInt(caller_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this resource." });
+    }
+  } else if (caller_role === 'vendor') {
+    // Vendor is allowed, but we'll restrict query to their own vendor_id transactions
+  } else {
+    return res.status(403).json({ error: "Forbidden. Invalid role." });
+  }
+
+  let query;
+  let params;
+  if (caller_role === 'vendor') {
+    query = `
       SELECT 
           a.order_id, a.food_name, a.quantity, a.cost, a.total_cost, 
           a.debit_value_vendor, a.credit_value_vendor, a.balance_due, 
           a.order_date_time, c.Name AS customer_name, a.credit_customer, a.debit_customer
       FROM account a
-      JOIN customers c ON a.customer_id = c.customer_id
+      JOIN customer c ON a.customer_id = c.customer_id
+      WHERE a.customer_id = ? AND a.vendor_id = ?
+      ORDER BY a.order_date_time DESC;
+    `;
+    params = [customer_id, caller_id];
+  } else {
+    query = `
+      SELECT 
+          a.order_id, a.food_name, a.quantity, a.cost, a.total_cost, 
+          a.debit_value_vendor, a.credit_value_vendor, a.balance_due, 
+          a.order_date_time, c.Name AS customer_name, a.credit_customer, a.debit_customer
+      FROM account a
+      JOIN customer c ON a.customer_id = c.customer_id
       WHERE a.customer_id = ?
       ORDER BY a.order_date_time DESC;
-  `;
+    `;
+    params = [customer_id];
+  }
 
-  db.query(query, [customer_id], (err, results) => {
+  db.query(query, params, (err, results) => {
     if (err) {
       console.error("❌ Database Error:", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
 
-    if (results.length === 0) {
-      return res.status(404).json({ message: "No transactions found for this customer" });
-    }
-
-    // ✅ Filter out transactions where order_id is NULL
-    const validTransactions = results.filter(transaction => transaction.order_id !== null);
+    const validTransactions = results || [];
 
     if (validTransactions.length === 0) {
-      return res.status(404).json({ message: "No valid transactions found for this customer" });
+      return res.status(200).json({
+        customer_name: "",
+        transactions: [],
+        totalSummary: { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
+      });
     }
 
     // ✅ Calculate total amounts safely
     const totalSummary = validTransactions.reduce(
       (acc, item) => {
-        // console.log("🔹 Processing item:", item); // ✅ Debugging log
-
         acc.total_cost += item.total_cost || 0;
         acc.total_credit += item.debit_customer || 0;
         acc.total_debit += item.credit_customer || 0;
@@ -880,14 +1206,8 @@ app.get("/api/v1/customer-transactions/:customer_id", (req, res) => {
       { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
     );
 
-    console.log('✅ Response Data:', {
-      customer_name: validTransactions[0].customer_name,
-      transactions: validTransactions,
-      totalSummary
-    });
-
     res.json({
-      customer_name: validTransactions[0].customer_name,
+      customer_name: validTransactions[0]?.customer_name || "",
       transactions: validTransactions,
       totalSummary
     });
@@ -899,11 +1219,26 @@ app.get("/api/v1/customer-transactions/:customer_id", (req, res) => {
 //check udar
 
 
-app.get("/api/v1/check-udar", (req, res) => {
+app.get('/api/v1/check-udar', verifyToken, (req, res) => {
   const { customer_id, vendor_id } = req.query; // Get query params
 
   if (!customer_id || !vendor_id) {
     return res.status(400).json({ message: "Missing customer_id or vendor_id" });
+  }
+
+  const caller_id = req.user.user_id;
+  const caller_role = req.user.role;
+
+  if (caller_role === 'customer') {
+    if (parseInt(customer_id) !== parseInt(caller_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this resource." });
+    }
+  } else if (caller_role === 'vendor') {
+    if (parseInt(vendor_id) !== parseInt(caller_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this resource." });
+    }
+  } else {
+    return res.status(403).json({ error: "Forbidden. Invalid role." });
   }
 
   console.log("Checking Udar approval for:", { customer_id, vendor_id });
@@ -931,7 +1266,7 @@ app.get("/api/v1/check-udar", (req, res) => {
 
 
 
-app.get("/api/v1/customer-udar-accounts/:customer_id", (req, res) => {
+app.get('/api/v1/customer-udar-accounts/:customer_id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
   const { customer_id } = req.params;
 
   if (!customer_id) {
@@ -957,13 +1292,13 @@ app.get("/api/v1/customer-udar-accounts/:customer_id", (req, res) => {
 
 
 // ✅ Fetch Udar Requests for Vendor
-app.get("/api/v1/udar-requests/:vendor_id", (req, res) => {
+app.get('/api/v1/udar-requests/:vendor_id', verifyToken, requireRole('vendor'), requireVendorOwnership, (req, res) => {
   const { vendor_id } = req.params;
 
   const query = `
       SELECT ur.request_id, c.Name 
       FROM udar_requests ur 
-      JOIN customers c ON ur.customer_id = c.customer_id 
+      JOIN customer c ON ur.customer_id = c.customer_id 
       WHERE ur.vendor_id = ? 
       AND ur.status = 'pending'
   `;
@@ -984,7 +1319,7 @@ app.get("/api/v1/udar-requests/:vendor_id", (req, res) => {
 
 
 // ✅ Fetch Udar Accounts for a Vendor
-app.get("/api/v1/vendor-dashboard/:vendor_id", (req, res) => {
+app.get('/api/v1/vendor-dashboard/:vendor_id', verifyToken, requireRole('vendor'), requireVendorOwnership, (req, res) => {
   const { vendor_id } = req.params;
   console.log(vendor_id);
 
@@ -996,7 +1331,7 @@ app.get("/api/v1/vendor-dashboard/:vendor_id", (req, res) => {
           c.customer_address,
           SUM(a.balance_due) AS total_pending_amount
       FROM account a
-      JOIN customers c ON a.customer_id = c.customer_id
+      JOIN customer c ON a.customer_id = c.customer_id
       WHERE a.vendor_id = ?
       GROUP BY c.customer_id, c.Name, c.Phone, c.customer_address;
   `;
@@ -1008,7 +1343,7 @@ app.get("/api/v1/vendor-dashboard/:vendor_id", (req, res) => {
     }
 
     if (results.length === 0) {
-      return res.status(404).json({ message: "No records found" });
+      return res.status(200).json([]);
     }
 
     res.json(results);
@@ -1018,7 +1353,7 @@ app.get("/api/v1/vendor-dashboard/:vendor_id", (req, res) => {
 
 
 // ✅ Fetch Customer Udar Accounts (All Vendors)
-app.get("/api/v1/customer/udar/:customer_id", (req, res) => {
+app.get('/api/v1/customer/udar/:customer_id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
   const { customer_id } = req.params;
 
   // ✅ Check if customer_id is valid
@@ -1032,7 +1367,7 @@ app.get("/api/v1/customer/udar/:customer_id", (req, res) => {
         a.debit_value_vendor, a.credit_value_vendor, a.balance_due, 
         a.order_date_time, v.Shop_name, a.credit_customer, a.debit_customer,a.vendor_id
     FROM account a
-    JOIN customers c ON a.customer_id = c.customer_id
+    JOIN customer c ON a.customer_id = c.customer_id
     JOIN vendor v ON a.vendor_id = v.vendor_id  -- Add this join for the 'vendors' table
     WHERE a.customer_id = ?
     ORDER BY a.order_date_time DESC;
@@ -1045,23 +1380,20 @@ app.get("/api/v1/customer/udar/:customer_id", (req, res) => {
       return res.status(500).json({ error: "Internal Server Error" });
     }
 
-    if (results.length === 0) {
-      return res.status(404).json({ message: "No transactions found for this customer" });
-    }
-
-    // ✅ Filter out transactions where order_id is NULL
-    const validTransactions = results.filter(transaction => transaction.order_id !== null);
+    const validTransactions = results || [];
 
     if (validTransactions.length === 0) {
-      return res.status(404).json({ message: "No valid transactions found for this customer" });
+      return res.status(200).json({
+        vendor_id: null,
+        Shop_name: "",
+        transactions: [],
+        totalSummary: { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
+      });
     }
-    console.log(results);
 
     // ✅ Calculate total amounts safely
     const totalSummary = validTransactions.reduce(
       (acc, item) => {
-        console.log("🔹 Processing item:", item); // ✅ Debugging log
-
         acc.total_cost += item.total_cost || 0;
         acc.total_credit += item.debit_value_vendor || 0;
         acc.total_debit += item.credit_value_vendor || 0;
@@ -1071,63 +1403,523 @@ app.get("/api/v1/customer/udar/:customer_id", (req, res) => {
       { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
     );
 
-    console.log('✅ Response Data:', {
-      // vendor_id:validTransactions[0].vendor_id,
-      Shop_name: validTransactions[0].Shop_name,
-      transactions: validTransactions,
-      totalSummary,
-
-
-    });
-
     res.json({
-      vendor_id: validTransactions[0].vendor_id,
-      Shop_name: validTransactions[0].Shop_name,
+      vendor_id: validTransactions[0]?.vendor_id || null,
+      Shop_name: validTransactions[0]?.Shop_name || "",
       transactions: validTransactions,
       totalSummary
     });
   });
 });
 
-// ✅ Clear Bill (Customer Pays)
-app.post("/api/v1/request-payment", (req, res) => {
-  const { customer_id, vendor_id, amount } = req.body;
-  console.log(customer_id, vendor_id, amount);
+app.post('/api/v1/request-payment', verifyToken, requireRole('customer'), (req, res) => {
+  const { vendor_id, amount } = req.body;
+  const customer_id = req.user.user_id;
 
-  // Insert request into a payment requests table (for the popup)
-  const insertQuery = `
-    INSERT INTO payment_requests (customer_id, vendor_id, amount, status, request_time) 
-    VALUES (?, ?, ?, 'pending', NOW());
-  `;
+  if (!vendor_id || !amount) {
+    return res.status(400).json({ error: "vendor_id and amount are required" });
+  }
 
-  db.query(insertQuery, [customer_id, vendor_id, amount], (err, result) => {
-    if (err) return res.status(500).send({ error: err.message });
+  // Verify that an accepted credit request exists between this customer and vendor
+  db.query("SELECT COUNT(*) AS count FROM udar_requests WHERE customer_id = ? AND vendor_id = ? AND status = 'accepted'", [customer_id, vendor_id], (err, relationshipResult) => {
+    if (err || relationshipResult[0].count === 0) {
+      return res.status(403).json({ error: "Forbidden. No credit relationship exists with this vendor." });
+    }
 
-    res.json({ success: true, message: "Payment request sent to the vendor." });
+    // Insert request into a payment requests table (for the popup)
+    const insertQuery = `
+      INSERT INTO payment_requests (customer_id, vendor_id, amount, status, request_time) 
+      VALUES (?, ?, ?, 'pending', NOW());
+    `;
+
+    db.query(insertQuery, [customer_id, vendor_id, amount], (err, result) => {
+      if (err) return res.status(500).send({ error: err.message });
+      const request_id = result.insertId;
+
+      db.query('SELECT Name FROM customer WHERE customer_id = ?', [customer_id], (cErr, cRes) => {
+        const cName = (!cErr && cRes && cRes.length > 0) ? cRes[0].Name : 'Customer';
+        
+        // Emit Socket event to vendor
+        io.to(`vendor_${vendor_id}`).emit('payment-request', {
+          request_id,
+          customer_id,
+          customer_name: cName,
+          amount,
+          request_time: new Date()
+        });
+
+        sendPushNotification(vendor_id, 'vendor', 'Payment Received', `Payment request of ₹${amount} received from ${cName}.`, 'Payment Received', 'VendorCustomerDetails').catch(e => console.error('FCM error:', e));
+      });
+      res.json({ success: true, message: "Payment request sent to the vendor." });
+    });
   });
 });
 
 
 // ✅ Monthly Reminder to Customers
-app.get("/api/v1/send-reminder", (req, res) => {
+app.get('/api/v1/send-reminder', verifyToken, requireRole('vendor'), (req, res) => {
+  const vendor_id = req.user.user_id;
   const query = `
-    SELECT DISTINCT c.customer_name, c.Phone, v.Shop_name, a.balance_due
+    SELECT DISTINCT c.Name AS customer_name, c.Phone, v.Shop_name, a.balance_due
     FROM account a
-    JOIN customers c ON a.customer_id = c.customer_id
+    JOIN customer c ON a.customer_id = c.customer_id
     JOIN vendor v ON a.vendor_id = v.vendor_id
-    WHERE a.payment_status = 'pending' AND a.balance_due > 0;
+    WHERE a.payment_status = 'pending' AND a.balance_due > 0 AND a.vendor_id = ?;
   `;
-  db.query(query, (err, result) => {
+  db.query(query, [vendor_id], (err, result) => {
     if (err) return res.status(500).send(err);
     result.forEach(customer => {
-      console.log(`Reminder sent to ${customer.customer_name} for ₹${customer.balance_due} at ${customer.shop_name}`);
+      console.log(`Reminder sent to ${customer.customer_name} for ₹${customer.balance_due} at ${customer.Shop_name}`);
     });
     res.json({ message: "Reminders sent" });
   });
 });
-app.get('/api/v1/customer/:customer_id', (req, res) => {
+
+// ==========================================
+// LOCATION & GEOCODING SERVICES
+// ==========================================
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+const https = require('https');
+
+// Reverse Geocoding via Nominatim with local mock fallback
+app.post('/api/v1/location/reverse-geocode', verifyToken, (req, res) => {
+  const { latitude, longitude } = req.body;
+  if (latitude === undefined || longitude === undefined) {
+    return res.status(400).json({ error: "Latitude and longitude are required" });
+  }
+
+  const lat = parseFloat(latitude);
+  const lon = parseFloat(longitude);
+
+  const sendMockFallback = () => {
+    let mockAddress = "";
+    if (Math.abs(lat - 29.1492) < 0.5 && Math.abs(lon - 75.7217) < 0.5) {
+      if (lat > 29.15) mockAddress = "Model Town, Hisar, Haryana";
+      else if (lat < 29.14) mockAddress = "Sector 13, Hisar, Haryana";
+      else mockAddress = "Sector 15, Hisar, Haryana";
+    } else if (Math.abs(lat - 28.4595) < 0.5 && Math.abs(lon - 77.0266) < 0.5) {
+      if (lat > 28.46) mockAddress = "Sector 15, Gurugram, Haryana";
+      else if (lat < 28.45) mockAddress = "Sohna Road, Gurugram, Haryana";
+      else mockAddress = "Sector 45, Gurugram, Haryana";
+    } else {
+      mockAddress = `Near Bus Stand, Hisar, Haryana`;
+    }
+    res.json({ formatted_address: mockAddress });
+  };
+
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+  const requestOptions = {
+    headers: {
+      'User-Agent': 'LocalDeliveryApp/1.0'
+    },
+    timeout: 3000
+  };
+
+  https.get(url, requestOptions, (apiRes) => {
+    let data = '';
+    apiRes.on('data', (chunk) => { data += chunk; });
+    apiRes.on('end', () => {
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed && parsed.display_name) {
+          return res.json({ formatted_address: parsed.display_name });
+        }
+        sendMockFallback();
+      } catch (e) {
+        sendMockFallback();
+      }
+    });
+  }).on('error', (err) => {
+    sendMockFallback();
+  });
+});
+
+// Search Address via Nominatim with mock fallback
+app.post('/api/v1/location/search', verifyToken, (req, res) => {
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ error: "Query is required" });
+
+  const sendMockFallback = () => {
+    const mockResults = [
+      {
+        display_name: `${query}, Sector 15, Hisar, Haryana`,
+        lat: "29.1492",
+        lon: "75.7217"
+      },
+      {
+        display_name: `${query}, Model Town, Hisar, Haryana`,
+        lat: "29.1550",
+        lon: "75.7250"
+      },
+      {
+        display_name: `${query}, Sector 15, Gurugram, Haryana`,
+        lat: "28.4595",
+        lon: "77.0266"
+      }
+    ];
+    res.json(mockResults);
+  };
+
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
+  const requestOptions = {
+    headers: {
+      'User-Agent': 'LocalDeliveryApp/1.0'
+    },
+    timeout: 3000
+  };
+
+  https.get(url, requestOptions, (apiRes) => {
+    let data = '';
+    apiRes.on('data', (chunk) => { data += chunk; });
+    apiRes.on('end', () => {
+      try {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return res.json(parsed);
+        }
+        sendMockFallback();
+      } catch (e) {
+        sendMockFallback();
+      }
+    });
+  }).on('error', (err) => {
+    sendMockFallback();
+  });
+});
+
+// Fetch Customer Addresses
+app.get('/api/v1/customer/addresses', verifyToken, requireRole('customer'), (req, res) => {
+  const customer_id = req.user.user_id;
+  db.query("SELECT * FROM customer_addresses WHERE customer_id = ? ORDER BY is_default DESC, created_at DESC", [customer_id], (err, results) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    res.json(results);
+  });
+});
+
+// Save Customer Address
+app.post('/api/v1/customer/addresses', verifyToken, requireRole('customer'), (req, res) => {
+  const customer_id = req.user.user_id;
+  const { 
+    address_type, 
+    latitude, 
+    longitude, 
+    formatted_address, 
+    is_default,
+    house_no,
+    building_name,
+    floor,
+    landmark,
+    area,
+    city,
+    state,
+    structured_address
+  } = req.body;
+
+  if (!address_type || latitude === undefined || longitude === undefined || !formatted_address) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const lat = parseFloat(latitude);
+  const lon = parseFloat(longitude);
+  const isDef = is_default ? 1 : 0;
+
+  const saveAddress = () => {
+    const insertQuery = `
+      INSERT INTO customer_addresses (
+        customer_id, address_type, latitude, longitude, formatted_address, is_default,
+        house_no, building_name, floor, landmark, area, city, state, structured_address
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    db.query(insertQuery, [
+      customer_id, address_type, lat, lon, formatted_address, isDef,
+      house_no || null,
+      building_name || null,
+      floor || null,
+      landmark || null,
+      area || null,
+      city || null,
+      state || null,
+      structured_address ? (typeof structured_address === 'string' ? structured_address : JSON.stringify(structured_address)) : null
+    ], (err, result) => {
+      if (err) {
+        console.error("Database error saving customer address:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+      res.json({ success: true, message: "Address saved successfully", address_id: result.insertId });
+    });
+  };
+
+  if (isDef) {
+    db.query("UPDATE customer_addresses SET is_default = 0 WHERE customer_id = ?", [customer_id], (err) => {
+      if (err) return res.status(500).json({ error: "Database error" });
+      saveAddress();
+    });
+  } else {
+    saveAddress();
+  }
+});
+
+// Edit Customer Address
+app.put('/api/v1/customer/addresses/:address_id', verifyToken, requireRole('customer'), (req, res) => {
+  const customer_id = req.user.user_id;
+  const { address_id } = req.params;
+  const { 
+    address_type, 
+    latitude, 
+    longitude, 
+    formatted_address, 
+    is_default,
+    house_no,
+    building_name,
+    floor,
+    landmark,
+    area,
+    city,
+    state,
+    structured_address
+  } = req.body;
+
+  if (!address_type || latitude === undefined || longitude === undefined || !formatted_address) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const lat = parseFloat(latitude);
+  const lon = parseFloat(longitude);
+  const isDef = is_default ? 1 : 0;
+
+  db.query("SELECT customer_id FROM customer_addresses WHERE address_id = ?", [address_id], (err, results) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    if (results.length === 0) return res.status(404).json({ error: "Address not found" });
+    if (parseInt(results[0].customer_id) !== parseInt(customer_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this address." });
+    }
+
+    const updateAddress = () => {
+      const updateQuery = `
+        UPDATE customer_addresses 
+        SET address_type = ?, latitude = ?, longitude = ?, formatted_address = ?, is_default = ?,
+            house_no = ?, building_name = ?, floor = ?, landmark = ?, area = ?, city = ?, state = ?, structured_address = ?
+        WHERE address_id = ?
+      `;
+      db.query(updateQuery, [
+        address_type, lat, lon, formatted_address, isDef,
+        house_no || null,
+        building_name || null,
+        floor || null,
+        landmark || null,
+        area || null,
+        city || null,
+        state || null,
+        structured_address ? (typeof structured_address === 'string' ? structured_address : JSON.stringify(structured_address)) : null,
+        address_id
+      ], (err) => {
+        if (err) {
+          console.error("Database error updating customer address:", err);
+          return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ success: true, message: "Address updated successfully" });
+      });
+    };
+
+    if (isDef) {
+      db.query("UPDATE customer_addresses SET is_default = 0 WHERE customer_id = ?", [customer_id], (err) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        updateAddress();
+      });
+    } else {
+      updateAddress();
+    }
+  });
+});
+
+// Delete Customer Address
+app.delete('/api/v1/customer/addresses/:address_id', verifyToken, requireRole('customer'), (req, res) => {
+  const customer_id = req.user.user_id;
+  const { address_id } = req.params;
+
+  db.query("SELECT customer_id FROM customer_addresses WHERE address_id = ?", [address_id], (err, results) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    if (results.length === 0) return res.status(404).json({ error: "Address not found" });
+    if (parseInt(results[0].customer_id) !== parseInt(customer_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this address." });
+    }
+
+    db.query("DELETE FROM customer_addresses WHERE address_id = ?", [address_id], (err) => {
+      if (err) return res.status(500).json({ error: "Database error" });
+      res.json({ success: true, message: "Address deleted successfully" });
+    });
+  });
+});
+
+// Set Default Customer Address
+app.put('/api/v1/customer/addresses/:address_id/default', verifyToken, requireRole('customer'), (req, res) => {
+  const customer_id = req.user.user_id;
+  const { address_id } = req.params;
+
+  db.query("SELECT customer_id FROM customer_addresses WHERE address_id = ?", [address_id], (err, results) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    if (results.length === 0) return res.status(404).json({ error: "Address not found" });
+    if (parseInt(results[0].customer_id) !== parseInt(customer_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this address." });
+    }
+
+    db.query("UPDATE customer_addresses SET is_default = 0 WHERE customer_id = ?", [customer_id], (err) => {
+      if (err) return res.status(500).json({ error: "Database error" });
+      db.query("UPDATE customer_addresses SET is_default = 1 WHERE address_id = ?", [address_id], (err) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        res.json({ success: true, message: "Default address updated successfully" });
+      });
+    });
+  });
+});
+
+// Fetch Nearby Sorted Vendors
+app.get('/api/v1/customer/nearby-vendors', verifyToken, requireRole('customer'), (req, res) => {
+  const customer_id = req.user.user_id;
+  const latParam = req.query.latitude;
+  const lonParam = req.query.longitude;
+
+  const getVendors = (custLat, custLon) => {
+    const query = `
+      SELECT 
+        v.vendor_id, 
+        v.Shop_name, 
+        v.shop_address, 
+        v.latitude, 
+        v.longitude, 
+        v.formatted_address,
+        v.service_radius,
+        v.is_online,
+        GROUP_CONCAT(DISTINCT f.food_type ORDER BY f.food_type SEPARATOR ', ') AS food_types, 
+        GROUP_CONCAT(DISTINCT f.food_img ORDER BY f.food_img SEPARATOR ', ') AS food_images,
+        GROUP_CONCAT(DISTINCT f.food_name ORDER BY f.food_name SEPARATOR ', ') AS food_names,
+        GROUP_CONCAT(DISTINCT f.food_description ORDER BY f.food_description SEPARATOR ' | ') AS food_descriptions
+      FROM vendor v
+      LEFT JOIN food f ON v.vendor_id = f.vendor_id
+      GROUP BY v.vendor_id;
+    `;
+    db.query(query, (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      const vendorList = results.map((vendor) => {
+        let distance = null;
+        let isWithinRadius = false;
+        if (custLat !== null && custLon !== null && vendor.latitude !== null && vendor.longitude !== null) {
+          distance = calculateDistance(
+            parseFloat(custLat),
+            parseFloat(custLon),
+            parseFloat(vendor.latitude),
+            parseFloat(vendor.longitude)
+          );
+          const radiusVal = parseFloat(vendor.service_radius || 5.00);
+          isWithinRadius = distance <= radiusVal;
+        }
+        return {
+          ...vendor,
+          distance: distance !== null ? parseFloat(distance.toFixed(2)) : null,
+          is_within_service_radius: isWithinRadius
+        };
+      });
+
+      vendorList.sort((a, b) => {
+        if (a.distance === null) return 1;
+        if (b.distance === null) return -1;
+        return a.distance - b.distance;
+      });
+
+      res.json(vendorList);
+    });
+  };
+
+  if (latParam !== undefined && lonParam !== undefined) {
+    getVendors(parseFloat(latParam), parseFloat(lonParam));
+  } else {
+    db.query("SELECT latitude, longitude FROM customer_addresses WHERE customer_id = ? AND is_default = 1 LIMIT 1", [customer_id], (err, results) => {
+      if (err || results.length === 0) {
+        return getVendors(null, null);
+      }
+      getVendors(parseFloat(results[0].latitude), parseFloat(results[0].longitude));
+    });
+  }
+});
+
+// Update Vendor Location & Service Radius
+app.post('/api/v1/vendor/location', verifyToken, requireRole('vendor'), (req, res) => {
+  const vendor_id = req.user.user_id;
+  const { 
+    latitude, 
+    longitude, 
+    formatted_address, 
+    service_radius, 
+    Shop_name,
+    shop_number,
+    landmark,
+    pocket,
+    sector,
+    city,
+    state,
+    structured_address
+  } = req.body;
+
+  if (latitude === undefined || longitude === undefined || !formatted_address) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const lat = parseFloat(latitude);
+  const lon = parseFloat(longitude);
+  const radius = service_radius !== undefined ? parseFloat(service_radius) : 5.00;
+
+  const query = `
+    UPDATE vendor 
+    SET latitude = ?, longitude = ?, formatted_address = ?, service_radius = ?, 
+        Shop_name = COALESCE(?, Shop_name),
+        shop_number = ?,
+        landmark = ?,
+        pocket = ?,
+        sector = ?,
+        city = ?,
+        state = ?,
+        structured_address = ?
+    WHERE vendor_id = ?
+  `;
+  const params = [
+    lat, lon, formatted_address, radius, 
+    Shop_name || null,
+    shop_number || null,
+    landmark || null,
+    pocket || null,
+    sector || null,
+    city || null,
+    state || null,
+    structured_address ? (typeof structured_address === 'string' ? structured_address : JSON.stringify(structured_address)) : null,
+    vendor_id
+  ];
+
+  db.query(query, params, (err, result) => {
+    if (err) {
+      console.error("Database error updating vendor location:", err);
+      return res.status(500).json({ error: "Database error" });
+    }
+    res.json({ success: true, message: "Vendor location updated successfully" });
+  });
+});
+
+app.get('/api/v1/customer/:customer_id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
   const { customer_id } = req.params; // Get customer_id from URL params
-  const query = `SELECT Phone,customer_address FROM customers WHERE customer_id = ?`;
+  const query = `SELECT Phone,customer_address FROM customer WHERE customer_id = ?`;
 
   db.query(query, [customer_id], (err, result) => {
     if (err) {
@@ -1138,37 +1930,39 @@ app.get('/api/v1/customer/:customer_id', (req, res) => {
   });
 });
 
-app.get("/api/v1/get-customer-vendor", (req, res) => {
-  const getCustomerQuery = "SELECT customer_id FROM customers LIMIT 1"; // Modify as needed
-  const getVendorQuery = "SELECT vendor_id FROM vendor LIMIT 1"; // Modify as needed
+app.get('/api/v1/get-customer-vendor', verifyToken, (req, res) => {
+  const caller_id = req.user.user_id;
+  const caller_role = req.user.role;
 
-  db.query(getCustomerQuery, (err, customerResult) => {
-    if (err) {
-      console.error("Error fetching customer_id:", err);
-      return res.status(500).json({ error: "Error fetching customer data" });
-    }
-
-    db.query(getVendorQuery, (err, vendorResult) => {
-      if (err) {
-        console.error("Error fetching vendor_id:", err);
-        return res.status(500).json({ error: "Error fetching vendor data" });
-      }
-
-      // Ensure both exist
-      if (customerResult.length === 0 || vendorResult.length === 0) {
-        return res.status(404).json({ error: "No data found" });
-      }
-
-      res.json({
-        customer_id: customerResult[0].customer_id,
-        vendor_id: vendorResult[0].vendor_id,
-      });
+  if (caller_role === 'customer') {
+    // Get a vendor this customer has a relationship with, or just the first vendor
+    const getVendorQuery = `
+      SELECT v.vendor_id FROM vendor v
+      LEFT JOIN udar_requests ur ON v.vendor_id = ur.vendor_id AND ur.customer_id = ?
+      ORDER BY ur.status = 'accepted' DESC, v.vendor_id ASC LIMIT 1
+    `;
+    db.query(getVendorQuery, [caller_id], (err, result) => {
+      if (err || result.length === 0) return res.status(404).json({ error: "No vendor found" });
+      res.json({ customer_id: caller_id, vendor_id: result[0].vendor_id });
     });
-  });
+  } else if (caller_role === 'vendor') {
+    // Get a customer this vendor has a relationship with, or the first customer
+    const getCustomerQuery = `
+      SELECT c.customer_id FROM customer c
+      LEFT JOIN udar_requests ur ON c.customer_id = ur.customer_id AND ur.vendor_id = ?
+      ORDER BY ur.status = 'accepted' DESC, c.customer_id ASC LIMIT 1
+    `;
+    db.query(getCustomerQuery, [caller_id], (err, result) => {
+      if (err || result.length === 0) return res.status(404).json({ error: "No customer found" });
+      res.json({ customer_id: result[0].customer_id, vendor_id: caller_id });
+    });
+  } else {
+    res.status(403).json({ error: "Forbidden" });
+  }
 });
 
 
-app.get("/api/v1/udar/vendors/:customer_id", (req, res) => {
+app.get('/api/v1/udar/vendors/:customer_id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
   const { customer_id } = req.params;
   console.log("Received customer_id:", customer_id); // Debugging
 
@@ -1201,7 +1995,7 @@ app.get("/api/v1/udar/vendors/:customer_id", (req, res) => {
 
 
 // <<<<<<<<fetch payment request
-app.get("/api/v1/payment-requests/:customer_id", (req, res) => {
+app.get('/api/v1/payment-requests/:customer_id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
   const { customer_id } = req.params;
   console.log(customer_id);
 
@@ -1227,69 +2021,157 @@ app.get("/api/v1/payment-requests/:customer_id", (req, res) => {
 
 
 // ✅ Receive Payment (Vendor Accepts Payment Request)
-app.post("/api/v1/receive-payment", (req, res) => {
-  console.log("Received Payment Request:", req.body);
-  const { customer_id, amount_received } = req.body;
-  console.log("log id ", customer_id, amount_received);
+app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, res) => {
+  console.log("Received Payment Request Approval:", req.body);
+  const { customer_id, amount_received, request_id } = req.body;
+  const vendor_id = req.user.user_id;
 
   if (!customer_id || !amount_received) {
     return res.status(400).json({ success: false, message: "Missing customer_id or amount_received" });
   }
 
-  // Step 1: Update the customer's account
-  const updateAccountSQL = `
-    UPDATE account
-    SET 
-      debit_customer = debit_customer + ?, 
-      credit_value_vendor = credit_value_vendor + ?, 
-      balance_due = balance_due - ?, 
-      payment_method = 'cash', 
-      payment_status = 'paid', 
-      payment_date_time = NOW()
-    WHERE customer_id = ?
-  `;
+  const paymentAmount = parseFloat(amount_received);
 
-  db.query(updateAccountSQL, [amount_received, amount_received, amount_received, customer_id], (err, result) => {
-    if (err) {
-      console.error("❌ Error updating account balance:", err);
-      return res.status(500).json({ success: false, message: "Failed to update account balance" });
+  // Verify credit relationship
+  db.query("SELECT COUNT(*) AS count FROM udar_requests WHERE customer_id = ? AND vendor_id = ? AND status = 'accepted'", [customer_id, vendor_id], (err, relationshipResult) => {
+    if (err || relationshipResult[0].count === 0) {
+      return res.status(403).json({ error: "Forbidden. No credit relationship exists with this customer." });
     }
 
-    // Step 2: Update the payment request status to 'completed'
-    const updateRequestSQL = `
-      UPDATE payment_requests
-      SET status = 'complete'
-      WHERE customer_id = ? AND amount = ? AND status = 'pending'
-      LIMIT 1
-    `;
-
-    db.query(updateRequestSQL, [customer_id, amount_received], (err, result) => {
-      if (err) {
-        console.error("❌ Error updating payment request status:", err);
-        return res.status(500).json({ success: false, message: "Failed to update payment request" });
+    db.query("SELECT Name FROM customer WHERE customer_id = ?", [customer_id], (cErr, customerData) => {
+      if (cErr || customerData.length === 0) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
       }
+      const customerName = customerData[0].Name;
 
-      //   // Step 3: Insert a transaction record for the vendor
-      const insertVendorTransactionSQL = `
-        INSERT INTO vendor_transaction (customer_id, amount, transaction_type)
-        VALUES (?, ?, 'credit')
-      `;
+      db.beginTransaction((tErr) => {
+        if (tErr) return res.status(500).json({ success: false, message: "Failed to start database transaction" });
 
-      db.query(insertVendorTransactionSQL, [customer_id, amount_received], (err, result) => {
-        if (err) {
-          console.error("❌ Error inserting vendor transaction:", err);
-          return res.status(500).json({ success: false, message: "Failed to record transaction" });
-        }
+        // Step 1: Insert ledger adjustment row
+        const insertPaymentQuery = `
+          INSERT INTO account 
+            (vendor_id, customer_id, customer_name, order_date_time, credit_value_vendor, debit_customer, credit_customer, balance_due, payment_method, payment_status, created_at) 
+          VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'cash', 'completed', NOW())
+        `;
+        db.query(insertPaymentQuery, [vendor_id, customer_id, customerName, paymentAmount, paymentAmount, paymentAmount, -paymentAmount], (err) => {
+          if (err) {
+            console.error("❌ Ledger error in receive-payment:", err);
+            return db.rollback(() => res.status(500).json({ success: false, message: "Ledger transaction failed" }));
+          }
 
-        res.json({ success: true, message: "Payment received successfully" });
+          // Step 2: Update the payment request status to 'complete'
+          const updateRequestSQL = request_id ?
+            `UPDATE payment_requests SET status = 'complete', completed_time = NOW() WHERE request_id = ? AND status = 'pending'` :
+            `UPDATE payment_requests SET status = 'complete', completed_time = NOW() WHERE customer_id = ? AND amount = ? AND status = 'pending' LIMIT 1`;
+          const requestParams = request_id ? [request_id] : [customer_id, paymentAmount];
+
+          db.query(updateRequestSQL, requestParams, (err, updateResult) => {
+            if (err) {
+              console.error("❌ Request update error:", err);
+              return db.rollback(() => res.status(500).json({ success: false, message: "Failed to update payment request status" }));
+            }
+
+            // Step 3: Insert vendor_transaction record
+            const insertVendorTransactionSQL = `
+              INSERT INTO vendor_transaction (customer_id, vendor_id, amount, transaction_type)
+              VALUES (?, ?, ?, 'credit')
+            `;
+            db.query(insertVendorTransactionSQL, [customer_id, vendor_id, paymentAmount], (err) => {
+              if (err) {
+                console.error("❌ Transaction logging error:", err);
+                return db.rollback(() => res.status(500).json({ success: false, message: "Failed to log transaction" }));
+              }
+
+              db.commit((commitErr) => {
+                if (commitErr) {
+                  return db.rollback(() => res.status(500).json({ success: false, message: "Failed to commit ledger entry" }));
+                }
+
+                // Emit Socket.io real-time confirmations
+                io.to(`vendor_${vendor_id}`).emit('payment-received', { customer_id, amount: paymentAmount, request_id });
+                io.to(`customer_${customer_id}`).emit('payment-recorded', { vendor_id, amount: paymentAmount, request_id });
+
+                // Send push notification
+                db.query('SELECT Shop_name FROM vendor WHERE vendor_id = ?', [vendor_id], (vErr, vRes) => {
+                  const sName = (!vErr && vRes && vRes.length > 0) ? vRes[0].Shop_name : 'Vendor';
+                  sendPushNotification(customer_id, 'customer', 'Payment Approved', `Your payment of ₹${paymentAmount} has been approved by ${sName}.`, 'Payment Approved', 'MyUdarScreen').catch(e => console.error('FCM error:', e));
+                });
+
+                res.json({ success: true, message: "Payment verified and ledger updated successfully" });
+              });
+            });
+          });
+        });
       });
     });
   });
 });
+
+// ✅ Reject Payment Request
+app.post('/api/v1/reject-payment', verifyToken, requireRole('vendor'), (req, res) => {
+  console.log("Received Payment Request Rejection:", req.body);
+  const { customer_id, amount, request_id } = req.body;
+  const vendor_id = req.user.user_id;
+
+  if (!customer_id && !request_id) {
+    return res.status(400).json({ success: false, message: "Missing request_id or customer_id" });
+  }
+
+  const updateRequestSQL = request_id ?
+    `UPDATE payment_requests SET status = 'rejected', completed_time = NOW() WHERE request_id = ? AND status = 'pending'` :
+    `UPDATE payment_requests SET status = 'rejected', completed_time = NOW() WHERE customer_id = ? AND amount = ? AND status = 'pending' LIMIT 1`;
+  const requestParams = request_id ? [request_id] : [customer_id, amount];
+
+  db.query(updateRequestSQL, requestParams, (err, result) => {
+    if (err) {
+      console.error("❌ Request rejection update error:", err);
+      return res.status(500).json({ success: false, message: "Failed to reject payment request" });
+    }
+
+    const payAmt = parseFloat(amount || 0);
+
+    // Emit Socket event to customer
+    io.to(`customer_${customer_id}`).emit('payment-rejected', { vendor_id, amount: payAmt, request_id });
+
+    // Send push notification
+    db.query('SELECT Shop_name FROM vendor WHERE vendor_id = ?', [vendor_id], (vErr, vRes) => {
+      const sName = (!vErr && vRes && vRes.length > 0) ? vRes[0].Shop_name : 'Vendor';
+      sendPushNotification(customer_id, 'customer', 'Payment Rejected', `Your payment of ₹${payAmt} has been rejected by ${sName}.`, 'Payment Rejected', 'MyUdarScreen').catch(e => console.error('FCM error:', e));
+    });
+
+    res.json({ success: true, message: "Payment request rejected successfully" });
+  });
+});
+
+// ✅ Get Vendor Payment Requests
+app.get('/api/v1/vendor/payment-requests/:vendor_id', verifyToken, requireRole('vendor'), (req, res) => {
+  const { vendor_id } = req.params;
+  if (parseInt(vendor_id) !== parseInt(req.user.user_id)) {
+    return res.status(403).json({ error: "Forbidden. You do not own this resource." });
+  }
+
+  const sql = `
+    SELECT pr.*, c.Name AS customer_name, c.Phone AS customer_phone 
+    FROM payment_requests pr
+    JOIN customer c ON pr.customer_id = c.customer_id
+    WHERE pr.vendor_id = ?
+    ORDER BY pr.request_time DESC
+  `;
+
+  db.query(sql, [vendor_id], (err, results) => {
+    if (err) {
+      console.error("❌ Error fetching vendor payment requests:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+    res.json(results || []);
+  });
+});
+
+
 //  to fetch the customer data
-app.get("/api/v1/update/:customer_id", (req, res) => {
+app.get('/api/v1/update/:customer_id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
   const customer_id = req.params.customer_id;
-  const sql = "SELECT * FROM customers WHERE customer_id = ?";
+  const sql = "SELECT * FROM customer WHERE customer_id = ?";
 
   db.query(sql, [customer_id], (err, result) => {
     if (err) {
@@ -1311,13 +2193,11 @@ app.get("/api/v1/update/:customer_id", (req, res) => {
 
 
 
-
 // set update
-
-app.put("/api/v1/customer/:id", (req, res) => {
+app.put('/api/v1/customer/:id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
   const customer_id = req.params.id;
   const { Name, Phone, username } = req.body;
-  const sql = "UPDATE customers SET Name = ?, Phone = ?, username = ? WHERE customer_id = ?";
+  const sql = "UPDATE customer SET Name = ?, Phone = ?, username = ? WHERE customer_id = ?";
   db.query(sql, [Name, Phone, username, customer_id], (err, result) => {
     if (err) return res.status(500).json({ error: err });
     res.json({ message: "Customer updated successfully" });
@@ -1327,37 +2207,68 @@ app.put("/api/v1/customer/:id", (req, res) => {
 //  food
 
 // Fetch all food items for a vendor
-app.post("/api/v1/toggle-food/:food_id", (req, res) => {
+const handleToggleFood = (req, res) => {
   const { food_id } = req.params; // Get food_id from URL
-  const { is_available } = req.body; // Get new status from request bodycd.
+  const { is_available } = req.body; // Get new status from request body
   console.log("j", food_id, is_available);
 
-  const query = "UPDATE food SET is_available = ? WHERE food_id = ?";
-  db.query(query, [is_available, food_id], (err, result) => {
-    if (err) {
-      console.error("Error updating food status:", err);
-      return res.status(500).json({ message: "Internal Server Error" });
+  verifyFoodOwnership(food_id, req.user.user_id, (err, owns) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (!owns) {
+      return res.status(403).json({ error: "Forbidden. You do not own this food item." });
     }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Food item not found" });
-    }
+    const query = "UPDATE food SET is_available = ? WHERE food_id = ?";
+    db.query(query, [is_available, food_id], (err, result) => {
+      if (err) {
+        console.error("Error updating food status:", err);
+        return res.status(500).json({ message: "Internal Server Error" });
+      }
 
-    res.json({ message: "Food availability updated successfully" });
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Food item not found" });
+      }
+
+      res.json({ message: "Food availability updated successfully" });
+    });
   });
-});
+};
+
+app.post('/api/v1/toggle-food/:food_id', verifyToken, requireRole('vendor'), handleToggleFood);
+app.patch('/api/v1/toggle-food/:food_id', verifyToken, requireRole('vendor'), handleToggleFood);
 
 
 
 //fetch the opening timeings 
-app.get('/api/v1/vendor-details', (req, res) => {
-  const { vendor_id } = req.query;
+app.get('/api/v1/vendor-details', verifyToken, requireRole('vendor'), (req, res) => {
+  const vendor_id = req.user.user_id;
 
-  if (!vendor_id) {
-    return res.status(400).json({ error: "Vendor ID is required" });
-  }
+  const query = `SELECT Shop_name, open_close_timings, is_online, latitude, longitude, formatted_address, service_radius FROM vendor WHERE vendor_id = ?`;
 
-  const query = `SELECT Shop_name, open_close_timings ,is_online FROM vendor WHERE vendor_id = ?`;
+  db.query(query, [vendor_id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (result.length > 0) {
+      res.json(result[0]);
+    } else {
+      res.status(404).json({ error: "Vendor not found" });
+    }
+  });
+});
+
+
+app.get('/api/v1/vendor/:vendor_id', verifyToken, (req, res) => {
+  const { vendor_id } = req.params;
+
+  const query = `
+    SELECT Shop_name, open_close_timings, is_online, shop_address, Phone, username, 
+           latitude, longitude, formatted_address, service_radius,
+           shop_number, landmark, pocket, sector, city, state, structured_address
+    FROM vendor 
+    WHERE vendor_id = ?
+  `;
 
   db.query(query, [vendor_id], (err, result) => {
     if (err) {
@@ -1375,7 +2286,7 @@ app.get('/api/v1/vendor-details', (req, res) => {
 
 //  get the shop timings
 
-app.get("/api/v1/vendor-timings/:vendorId", (req, res) => {
+app.get('/api/v1/vendor-timings/:vendorId', verifyToken, (req, res) => {
   const { vendorId } = req.params;
   console.log(vendorId);
 
@@ -1387,27 +2298,23 @@ app.get("/api/v1/vendor-timings/:vendorId", (req, res) => {
     if (result.length > 0) {
       res.json(result[0]);
       console.log("r", result);
-
     } else {
       res.status(404).json({ error: "Vendor not found" });
     }
   });
 });
 
-
-// update timeings
-
-app.post("/api/v1/update-shop-timings/:vendorId", (req, res) => {
+// update timings
+const handleShopTimingsUpdate = (req, res) => {
   const { vendorId } = req.params;
   const { open_close_timings } = req.body;
   console.log("t", open_close_timings);
 
-  let timeings
+  let timeings;
   try {
-    timeings = JSON.stringify(open_close_timings)
+    timeings = typeof open_close_timings === 'string' ? open_close_timings : JSON.stringify(open_close_timings);
   } catch (err) {
     console.log("error");
-
   }
   const query = `UPDATE vendor SET open_close_timings = ? WHERE vendor_id = ?`;
   console.log("T", timeings);
@@ -1417,13 +2324,15 @@ app.post("/api/v1/update-shop-timings/:vendorId", (req, res) => {
 
     res.json({ message: "Shop timings updated successfully!" });
   });
-});
+};
 
-// tooggle shop
+app.post('/api/v1/update-shop-timings/:vendorId', verifyToken, requireRole('vendor'), requireVendorOwnership, handleShopTimingsUpdate);
+app.put('/api/v1/vendor/:vendorId/timings', verifyToken, requireRole('vendor'), requireVendorOwnership, handleShopTimingsUpdate);
 
-app.post("/api/v1/update-shop-online-status/:vendorId", (req, res) => {
+// toggle shop
+const handleShopOnlineStatusUpdate = (req, res) => {
   const { vendorId } = req.params;
-  const { isOnline } = req.body;
+  const isOnline = req.body.isOnline !== undefined ? req.body.isOnline : req.body.is_online;
 
   const query = `UPDATE vendor SET is_online = ? WHERE vendor_id = ?`;
 
@@ -1435,14 +2344,174 @@ app.post("/api/v1/update-shop-online-status/:vendorId", (req, res) => {
       isOnline
     });
   });
-});
+};
 
+app.post('/api/v1/update-shop-online-status/:vendorId', verifyToken, requireRole('vendor'), requireVendorOwnership, handleShopOnlineStatusUpdate);
+app.put('/api/v1/vendor/:vendorId/status', verifyToken, requireRole('vendor'), requireVendorOwnership, handleShopOnlineStatusUpdate);
 
-
-
+// Location endpoints moved above customer wildcard route
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT} (listening on all interfaces)`);
 });
+
+
+app.post('/api/v1/refresh', (req, res) => {
+  const { refreshToken, role, user_id } = req.body;
+  if (!refreshToken || !role || !user_id) return res.status(400).json({ error: 'Missing token' });
+  const table = role.toLowerCase() === 'vendor' ? 'vendor' : 'customer';
+  const idField = role.toLowerCase() === 'vendor' ? 'vendor_id' : 'customer_id';
+  db.query(`SELECT refresh_token FROM ${table} WHERE ${idField} = ?`, [user_id], async (err, result) => {
+    if (err || !result || result.length === 0 || !result[0].refresh_token) return res.status(403).json({ error: 'Invalid refresh token' });
+    const isValid = await bcrypt.compare(refreshToken, result[0].refresh_token);
+    if (!isValid) return res.status(403).json({ error: 'Invalid refresh token' });
+    try {
+      jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+      const newAccessToken = jwt.sign({ user_id, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
+      res.json({ accessToken: newAccessToken });
+    } catch (e) {
+      res.status(403).json({ error: 'Refresh token expired' });
+    }
+  });
+});
+
+app.post('/api/v1/logout', verifyToken, (req, res) => {
+  const { role, user_id } = req.user;
+  const table = role.toLowerCase() === 'vendor' ? 'vendor' : 'customer';
+  const idField = role.toLowerCase() === 'vendor' ? 'vendor_id' : 'customer_id';
+  const { device_id } = req.body;
+  db.query(`UPDATE ${table} SET refresh_token = NULL WHERE ${idField} = ?`, [user_id], async (err) => {
+    if (device_id) {
+      try {
+        await deleteFcmToken(user_id, role.toLowerCase(), device_id);
+      } catch (e) {
+        console.error('Error removing FCM token during logout:', e);
+      }
+    }
+    
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
+});
+
+
+
+app.post("/api/v1/vendor/receive-payment", verifyToken, requireRole('vendor'), async (req, res) => {
+  try {
+    const { customer_id, amount } = req.body;
+    const vendor_id = req.user.user_id;
+    if (!customer_id || !amount) return res.status(400).json({ success: false, message: "Missing required fields" });
+    const paymentAmount = parseFloat(amount);
+    if (isNaN(paymentAmount) || paymentAmount <= 0) return res.status(400).json({ success: false, message: "Payment amount must be greater than 0" });
+
+    // Verify credit relationship
+    db.query("SELECT COUNT(*) AS count FROM udar_requests WHERE customer_id = ? AND vendor_id = ? AND status = 'accepted'", [customer_id, vendor_id], (err, relationshipResult) => {
+      if (err || relationshipResult[0].count === 0) {
+        return res.status(403).json({ error: "Forbidden. No credit relationship exists with this customer." });
+      }
+
+      db.query("SELECT Name FROM customer WHERE customer_id = ?", [customer_id], (err, customerData) => {
+        if (err) return res.status(500).json({ success: false, message: "Database error" });
+        if (customerData.length === 0) return res.status(404).json({ success: false, message: "Customer not found" });
+        const customerName = customerData[0].Name;
+        db.query('START TRANSACTION', (err) => {
+          if (err) return res.status(500).json({ success: false, message: "Failed to start transaction" });
+          const insertPaymentQuery = `INSERT INTO account (vendor_id, customer_id, customer_name, order_date_time, credit_value_vendor, debit_customer, credit_customer, balance_due, payment_method, payment_status, created_at) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'cash', 'completed', NOW())`;
+          db.query(insertPaymentQuery, [vendor_id, customer_id, customerName, paymentAmount, paymentAmount, paymentAmount, -paymentAmount], (err) => {
+            if (err) {
+              return db.query('ROLLBACK', () => res.status(500).json({ success: false, message: "Database error" }));
+            }
+            db.query("UPDATE payment_requests SET status = 'completed' WHERE customer_id = ? AND vendor_id = ? AND status = 'pending'", [customer_id, vendor_id], (err) => {
+              if (err) {
+                return db.query('ROLLBACK', () => res.status(500).json({ success: false, message: "Database error" }));
+              }
+              db.query('COMMIT', (err) => {
+                if (err) {
+                  return db.query('ROLLBACK', () => res.status(500).json({ success: false, message: "Database error" }));
+                }
+                io.to(`vendor_${vendor_id}`).emit('payment-received', { customer_id, amount: paymentAmount });
+                io.to(`customer_${customer_id}`).emit('payment-recorded', { vendor_id, amount: paymentAmount });
+                db.query('SELECT Shop_name FROM vendor WHERE vendor_id = ?', [vendor_id], (vErr, vRes) => {
+                  const sName = (!vErr && vRes && vRes.length > 0) ? vRes[0].Shop_name : 'Vendor';
+                  sendPushNotification(customer_id, 'customer', 'Payment Approved', `Your payment of ₹${paymentAmount} has been approved by ${sName}.`, 'Payment Approved', 'MyUdarScreen').catch(e => console.error('FCM error:', e));
+                });
+                res.json({ success: true, message: "Payment recorded successfully" });
+              });
+            });
+          });
+        });
+      });
+    });
+  } catch (error) { res.status(500).json({ success: false, message: "Internal Server Error" }); }
+});
+
+
+// ✅ Update/Register FCM Token
+app.post('/api/v1/update-fcm-token', verifyToken, async (req, res) => {
+  try {
+    const { user_id, role } = req.user;
+    const { fcm_token, device_id } = req.body;
+    if (!fcm_token || !device_id) {
+      return res.status(400).json({ success: false, message: 'fcm_token and device_id are required' });
+    }
+    await saveFcmToken(user_id, role, fcm_token, device_id);
+    res.json({ success: true, message: 'FCM token updated successfully' });
+  } catch (error) {
+    console.error('Error updating FCM token:', error);
+    res.status(500).json({ success: false, message: 'Failed to update FCM token' });
+  }
+});
+
+// ✅ Reject Udar (Credit) Request
+app.post('/api/v1/reject-udar', verifyToken, requireRole('vendor'), (req, res) => {
+  const { request_id } = req.body;
+  if (!request_id) {
+    return res.status(400).json({ message: 'request_id is required' });
+  }
+
+  // Verify that the request belongs to the logged-in vendor
+  db.query("SELECT vendor_id FROM udar_requests WHERE request_id = ?", [request_id], (err, results) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (results.length === 0) return res.status(404).json({ message: "Request not found" });
+    if (parseInt(results[0].vendor_id) !== parseInt(req.user.user_id)) {
+      return res.status(403).json({ error: "Forbidden. You do not own this credit request." });
+    }
+
+    console.log("Rejecting request_id:", request_id);
+
+    // Update status to 'rejected' in udar_requests table
+    const updateQuery = `UPDATE udar_requests SET status = 'rejected' WHERE request_id = ?`;
+
+    db.query(updateQuery, [request_id], (err, result) => {
+      if (err) {
+        console.error("Database UPDATE error:", err);
+        return res.status(500).json({ message: "Database error", error: err });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Request not found or already processed" });
+      }
+
+      // Find customer_id and vendor_id for this request to trigger notification
+      db.query('SELECT customer_id, vendor_id FROM udar_requests WHERE request_id = ?', [request_id], (sErr, sRes) => {
+        if (!sErr && sRes && sRes.length > 0) {
+          const { customer_id, vendor_id } = sRes[0];
+          db.query('SELECT Shop_name FROM vendor WHERE vendor_id = ?', [vendor_id], (vErr, vRes) => {
+            const shopName = (!vErr && vRes && vRes.length > 0) ? vRes[0].Shop_name : 'Vendor';
+            sendPushNotification(
+              customer_id,
+              'customer',
+              'Credit Request Rejected',
+              `Your Udar (credit) request has been rejected by ${shopName}.`,
+              'Credit Request Rejected',
+              'MyUdarScreen'
+            ).catch(e => console.error('FCM error:', e));
+          });
+        }
+      });
+
+      res.json({ status: "rejected", message: "Udar request has been rejected" });
+    });
+  });
+});
+
