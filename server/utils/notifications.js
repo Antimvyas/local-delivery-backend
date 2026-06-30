@@ -1,4 +1,4 @@
-const db = require('../dbs.js');
+const db = require('../config/db.js');
 const firebaseAdmin = require('./firebase.js');
 const logger = require('./logger.js');
 

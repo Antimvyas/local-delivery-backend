@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const db = require("./dbs.js");
+const db = require("./config/db.js");
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
@@ -28,52 +28,15 @@ cloudinary.config({
 
 
 
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  if (!authHeader) return res.status(401).json({ error: 'Access denied. No token provided.' });
-  const token = authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access denied. Invalid token format.' });
-  try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: 'Invalid or expired token.' });
-  }
-};
-
-// Role-based authorization middleware
-const requireRole = (role) => {
-  return (req, res, next) => {
-    if (!req.user || req.user.role !== role) {
-      return res.status(403).json({ error: "Access denied. Forbidden role." });
-    }
-    next();
-  };
-};
-
-// Customer ownership check (for endpoints where the user acts on their own data)
-const requireCustomerOwnership = (req, res, next) => {
-  const customerId = req.params.customer_id || req.params.id || req.query.customer_id || req.body.customer_id;
-  if (customerId && parseInt(customerId) !== parseInt(req.user.user_id)) {
-    return res.status(403).json({ error: "Forbidden. You do not own this resource." });
-  }
-  next();
-};
-
-// Vendor ownership check
-const requireVendorOwnership = (req, res, next) => {
-  const vendorId = req.params.vendor_id || req.params.vendorId || req.params.id || req.query.vendor_id || req.query.vendorId || req.body.vendor_id || req.body.vendorId;
-  if (vendorId && parseInt(vendorId) !== parseInt(req.user.user_id)) {
-    return res.status(403).json({ error: "Forbidden. You do not own this resource." });
-  }
-  next();
-};
+const {
+  verifyToken,
+  requireRole,
+  requireCustomerOwnership,
+  requireVendorOwnership
+} = require('./middleware/authMiddleware');
 
 
-const app = express();
-app.use(express.json());
-app.use(cors({}));
+const app = require('./app');
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
@@ -172,199 +135,7 @@ app.get('/api/v1/food', (req, res) => {
 
 
 
-// vendor & customers registration
-app.post('/api/v1/set-data', async (req, res) => {
-  const { username, Name, Phone, password, selectedOption, customer_address } = req.body;
-  if (!username || !Name || !Phone || !password || !selectedOption) return res.status(400).json({ error: 'All fields are required' });
 
-  if (password.length < 8 || password.length > 128) {
-    return res.status(400).json({ error: 'Password must be between 8 and 128 characters long.' });
-  }
-  const hasLetter = /[a-zA-Z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  if (!hasLetter || !hasNumber) {
-    return res.status(400).json({ error: 'Password must contain at least one letter and one number.' });
-  }
-  const table = selectedOption === 'customer' ? 'customer' : 'vendor';
-  db.query(`SELECT * FROM ${table} WHERE username = ? OR Phone = ?`, [username, Phone], async (err, results) => {
-    if (results && results.length > 0) {
-      if (results.some(user => user.username === username)) return res.status(400).json({ message: "Username already exists!" });
-      if (results.some(user => user.Phone === Phone)) return res.status(400).json({ message: "Phone number already exists!" });
-    }
-    const hashedPassword = await bcrypt.hash(password, 10);
-    let query, queryParams;
-    if (selectedOption === 'customer') {
-      query = `INSERT INTO ${table} (username, Name, Phone, password, selectedOption, customer_address) VALUES (?, ?, ?, ?, ?, ?)`;
-      queryParams = [username, Name, Phone, hashedPassword, selectedOption, customer_address];
-    } else {
-      query = `INSERT INTO ${table} (username, Name, Phone, password, selectedOption) VALUES (?, ?, ?, ?, ?)`;
-      queryParams = [username, Name, Phone, hashedPassword, selectedOption];
-    }
-    db.query(query, queryParams, async (err, result) => {
-      if (err) return res.status(500).json({ message: "Database error" });
-      
-      const userId = result.insertId;
-      const role = selectedOption.toLowerCase();
-      const accessToken = jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
-      const refreshToken = jwt.sign({ user_id: userId, role }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
-      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-      const idField = role === 'vendor' ? 'vendor_id' : 'customer_id';
-      
-      db.query(`UPDATE ${table} SET refresh_token = ? WHERE ${idField} = ?`, [hashedRefreshToken, userId], (updErr) => {
-        if (updErr) console.error("Error updating refresh token on registration", updErr);
-      });
-
-      res.json({ 
-        success: true,
-        message: "User added successfully", 
-        username: username, 
-        user_id: userId,
-        customer_id: role === 'customer' ? userId : null,
-        vendor_id: role === 'vendor' ? userId : null,
-        role: role,
-        accessToken,
-        refreshToken
-      });
-    });
-  });
-});
-
-// OTP send, verify, register mock endpoints
-app.post('/api/v1/otp/send', (req, res) => {
-  const { phone } = req.body;
-  if (!phone) return res.status(400).json({ error: "Phone number is required" });
-  console.log(`[MOCK OTP] Sending code 123456 to +91 ${phone}`);
-  res.json({ success: true, message: "OTP sent successfully" });
-});
-
-app.post('/api/v1/otp/verify', (req, res) => {
-  const { phone, otp } = req.body;
-  if (!phone || !otp) return res.status(400).json({ error: "Phone and OTP are required" });
-  
-  if (otp !== '123456') {
-    return res.status(400).json({ error: "Invalid verification code" });
-  }
-
-  // Check if customer exists
-  db.query("SELECT * FROM customer WHERE Phone = ? LIMIT 1", [phone], async (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
-    }
-
-    if (results.length > 0) {
-      const customer = results[0];
-      const userId = customer.customer_id;
-      const role = 'customer';
-      const accessToken = jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
-      const refreshToken = jwt.sign({ user_id: userId, role }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
-      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-      
-      db.query("UPDATE customer SET refresh_token = ? WHERE customer_id = ?", [hashedRefreshToken, userId], (updErr) => {
-        if (updErr) console.error("Error updating refresh token", updErr);
-      });
-
-      res.json({
-        success: true,
-        isNewUser: false,
-        accessToken,
-        refreshToken,
-        role,
-        user_id: userId,
-        customer_id: userId
-      });
-    } else {
-      res.json({
-        success: true,
-        isNewUser: true
-      });
-    }
-  });
-});
-
-app.post('/api/v1/otp/register', async (req, res) => {
-  const { phone, name } = req.body;
-  if (!phone || !name) return res.status(400).json({ error: "Phone and Name are required" });
-
-  const username = `cust_${phone}`;
-  const dummyPassword = Math.random().toString(36).slice(-8) + "1a"; // Random letter + number password
-  const hashedPassword = await bcrypt.hash(dummyPassword, 10);
-
-  // Check if phone or username already exists
-  db.query("SELECT * FROM customer WHERE Phone = ? OR username = ?", [phone, username], (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
-    }
-
-    if (results.length > 0) {
-      return res.status(400).json({ error: "Phone number or username already registered" });
-    }
-
-    const query = `INSERT INTO customer (username, Name, Phone, password, selectedOption) VALUES (?, ?, ?, ?, ?)`;
-    const queryParams = [username, name, phone, hashedPassword, 'customer'];
-
-    db.query(query, queryParams, async (insErr, result) => {
-      if (insErr) {
-        console.error(insErr);
-        return res.status(500).json({ error: "Database error" });
-      }
-
-      const userId = result.insertId;
-      const role = 'customer';
-      const accessToken = jwt.sign({ user_id: userId, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
-      const refreshToken = jwt.sign({ user_id: userId, role }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
-      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-
-      db.query("UPDATE customer SET refresh_token = ? WHERE customer_id = ?", [hashedRefreshToken, userId], (updErr) => {
-        if (updErr) console.error("Error updating refresh token", updErr);
-      });
-
-      res.json({
-        success: true,
-        accessToken,
-        refreshToken,
-        role,
-        user_id: userId,
-        customer_id: userId
-      });
-    });
-  });
-});
-
-// Login ----------->>>>>
-
-app.post('/api/v1/login', (req, res) => {
-  const { username, password, role } = req.body;
-  console.log(`[DEBUG LOGIN] Attempt: username="${username}", role="${role}", passwordLength=${password ? password.length : 0}`);
-  if (!username || !password || !role) return res.status(400).json({ error: 'All fields are required' });
-  const allowedRoles = { vendor: 'vendor', customer: 'customer' };
-  const table = allowedRoles[role.toLowerCase()];
-  if (!table) return res.status(400).json({ error: 'Invalid role' });
-
-  db.query(`SELECT * FROM ${table} WHERE username = ? OR phone = ? LIMIT 1`, [username, username], async (err, result) => {
-    if (err || !result || result.length === 0) {
-      console.log(`[DEBUG LOGIN] User not found: username="${username}" in table="${table}". Error:`, err);
-      return res.status(401).json({ success: false, message: 'Username or phone not found' });
-    }
-    const dbUser = result[0];
-    let isMatch = false;
-    try { isMatch = await bcrypt.compare(password, dbUser.password); } catch (e) {}
-    console.log(`[DEBUG LOGIN] bcrypt.compare result for user "${username}": isMatch=${isMatch}`);
-
-    if (!isMatch) {
-      console.log(`[DEBUG LOGIN] Password mismatch for user "${username}"`);
-      return res.status(401).json({ success: false, message: 'Incorrect password' });
-    }
-    const userId = dbUser.customer_id || dbUser.vendor_id;
-    const accessToken = jwt.sign({ user_id: userId, role: role.toLowerCase() }, process.env.JWT_SECRET, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ user_id: userId, role: role.toLowerCase() }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-    const idField = role.toLowerCase() === 'vendor' ? 'vendor_id' : 'customer_id';
-    db.query(`UPDATE ${table} SET refresh_token = ? WHERE ${idField} = ?`, [hashedRefreshToken, userId]);
-    res.json({ success: true, message: 'Login successful', user_id: userId, role: role.toLowerCase(), customer_id: dbUser.customer_id, vendor_id: dbUser.vendor_id, accessToken, refreshToken });
-  });
-});
 
 // update vendor
 app.post('/api/v1/add-vendor', verifyToken, requireRole('vendor'), (req, res) => {
@@ -2384,42 +2155,7 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 
-app.post('/api/v1/refresh', (req, res) => {
-  const { refreshToken, role, user_id } = req.body;
-  if (!refreshToken || !role || !user_id) return res.status(400).json({ error: 'Missing token' });
-  const table = role.toLowerCase() === 'vendor' ? 'vendor' : 'customer';
-  const idField = role.toLowerCase() === 'vendor' ? 'vendor_id' : 'customer_id';
-  db.query(`SELECT refresh_token FROM ${table} WHERE ${idField} = ?`, [user_id], async (err, result) => {
-    if (err || !result || result.length === 0 || !result[0].refresh_token) return res.status(403).json({ error: 'Invalid refresh token' });
-    const isValid = await bcrypt.compare(refreshToken, result[0].refresh_token);
-    if (!isValid) return res.status(403).json({ error: 'Invalid refresh token' });
-    try {
-      jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-      const newAccessToken = jwt.sign({ user_id, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
-      res.json({ accessToken: newAccessToken });
-    } catch (e) {
-      res.status(403).json({ error: 'Refresh token expired' });
-    }
-  });
-});
 
-app.post('/api/v1/logout', verifyToken, (req, res) => {
-  const { role, user_id } = req.user;
-  const table = role.toLowerCase() === 'vendor' ? 'vendor' : 'customer';
-  const idField = role.toLowerCase() === 'vendor' ? 'vendor_id' : 'customer_id';
-  const { device_id } = req.body;
-  db.query(`UPDATE ${table} SET refresh_token = NULL WHERE ${idField} = ?`, [user_id], async (err) => {
-    if (device_id) {
-      try {
-        await deleteFcmToken(user_id, role.toLowerCase(), device_id);
-      } catch (e) {
-        console.error('Error removing FCM token during logout:', e);
-      }
-    }
-    
-    res.json({ success: true, message: 'Logged out successfully' });
-  });
-});
 
 
 
@@ -2474,20 +2210,7 @@ app.post("/api/v1/vendor/receive-payment", verifyToken, requireRole('vendor'), a
 
 
 // ✅ Update/Register FCM Token
-app.post('/api/v1/update-fcm-token', verifyToken, async (req, res) => {
-  try {
-    const { user_id, role } = req.user;
-    const { fcm_token, device_id } = req.body;
-    if (!fcm_token || !device_id) {
-      return res.status(400).json({ success: false, message: 'fcm_token and device_id are required' });
-    }
-    await saveFcmToken(user_id, role, fcm_token, device_id);
-    res.json({ success: true, message: 'FCM token updated successfully' });
-  } catch (error) {
-    console.error('Error updating FCM token:', error);
-    res.status(500).json({ success: false, message: 'Failed to update FCM token' });
-  }
-});
+
 
 // ✅ Reject Udar (Credit) Request
 app.post('/api/v1/reject-udar', verifyToken, requireRole('vendor'), (req, res) => {
@@ -2541,3 +2264,6 @@ app.post('/api/v1/reject-udar', verifyToken, requireRole('vendor'), (req, res) =
     });
   });
 });
+
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);

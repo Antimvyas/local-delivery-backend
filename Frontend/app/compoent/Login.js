@@ -49,11 +49,12 @@ const Login = () => {
   
       if (response.data.success) {
         showSuccess('Logged in successfully!');
+        const authData = response.data.data;
         
-        await AsyncStorage.setItem('accessToken', response.data.accessToken);
-        await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
-        await AsyncStorage.setItem('userRole', response.data.role);
-        await AsyncStorage.setItem('userId', String(response.data.user_id));
+        await AsyncStorage.setItem('accessToken', authData.accessToken);
+        await AsyncStorage.setItem('refreshToken', authData.refreshToken);
+        await AsyncStorage.setItem('userRole', authData.role);
+        await AsyncStorage.setItem('userId', String(authData.user_id));
   
         await connectSocket();
         await registerFcmTokenWithServer();
@@ -66,9 +67,9 @@ const Login = () => {
         setUsername('');
   
         if (selectedOption === 'customer') {
-          navigation.navigate('CustomerDashboard', { customer_id: response.data.customer_id });
+          navigation.navigate('CustomerDashboard', { customer_id: authData.customer_id });
         } else if (selectedOption === 'vendor') {
-          navigation.navigate('VendorDashboard', { vendor_id: response.data.vendor_id });
+          navigation.navigate('VendorDashboard', { vendor_id: authData.vendor_id });
         }
       } 
     } catch (error) {

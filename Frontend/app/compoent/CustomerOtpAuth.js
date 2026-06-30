@@ -61,19 +61,18 @@ const CustomerOtpAuth = () => {
     setLoading(true);
     try {
       const response = await api.post('/otp/verify', { phone, otp });
-      const { success, isNewUser, accessToken, refreshToken, role, user_id, customer_id } = response.data;
-
-      if (success) {
-        if (isNewUser) {
+      if (response.data.success) {
+        const authData = response.data.data;
+        if (authData.isNewUser) {
           showSuccess('Phone verified. Please create your profile.');
           setStep(3);
         } else {
           // Logged in immediately
           showSuccess('Logged in successfully!');
-          await AsyncStorage.setItem('accessToken', accessToken);
-          await AsyncStorage.setItem('refreshToken', refreshToken);
-          await AsyncStorage.setItem('userRole', role);
-          await AsyncStorage.setItem('userId', String(user_id));
+          await AsyncStorage.setItem('accessToken', authData.accessToken);
+          await AsyncStorage.setItem('refreshToken', authData.refreshToken);
+          await AsyncStorage.setItem('userRole', authData.role);
+          await AsyncStorage.setItem('userId', String(authData.user_id));
 
           await connectSocket();
           await registerFcmTokenWithServer();
@@ -83,7 +82,7 @@ const CustomerOtpAuth = () => {
 
           navigation.reset({
             index: 0,
-            routes: [{ name: 'CustomerDashboard', params: { customer_id } }],
+            routes: [{ name: 'CustomerDashboard', params: { customer_id: authData.customer_id } }],
           });
         }
       }
@@ -104,14 +103,13 @@ const CustomerOtpAuth = () => {
     setLoading(true);
     try {
       const response = await api.post('/otp/register', { phone, name });
-      const { success, accessToken, refreshToken, role, user_id, customer_id } = response.data;
-
-      if (success) {
+      if (response.data.success) {
+        const authData = response.data.data;
         showSuccess('Account created successfully!');
-        await AsyncStorage.setItem('accessToken', accessToken);
-        await AsyncStorage.setItem('refreshToken', refreshToken);
-        await AsyncStorage.setItem('userRole', role);
-        await AsyncStorage.setItem('userId', String(user_id));
+        await AsyncStorage.setItem('accessToken', authData.accessToken);
+        await AsyncStorage.setItem('refreshToken', authData.refreshToken);
+        await AsyncStorage.setItem('userRole', authData.role);
+        await AsyncStorage.setItem('userId', String(authData.user_id));
 
         await connectSocket();
         await registerFcmTokenWithServer();
@@ -121,7 +119,7 @@ const CustomerOtpAuth = () => {
 
         navigation.reset({
           index: 0,
-          routes: [{ name: 'CustomerDashboard', params: { customer_id } }],
+          routes: [{ name: 'CustomerDashboard', params: { customer_id: authData.customer_id } }],
         });
       }
     } catch (error) {

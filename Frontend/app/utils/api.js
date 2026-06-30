@@ -51,7 +51,7 @@ api.interceptors.response.use(
           const user_id = await AsyncStorage.getItem('userId');
 
           const res = await axios.post(`${API_BASE}/refresh`, { refreshToken, role, user_id });
-          const newAccessToken = res.data.accessToken;
+          const newAccessToken = res.data.data.accessToken;
           
           await AsyncStorage.setItem('accessToken', newAccessToken);
           originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
