@@ -1,4 +1,3 @@
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -16,6 +15,16 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const logger = require('./utils/logger');
 const { saveFcmToken, deleteFcmToken, sendPushNotification } = require('./utils/notifications.js');
+
+// ✅ Cloudinary setup
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 
 
@@ -119,20 +128,15 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {});
 });
 
-// for IMAGE STORE
+// for IMAGE STORE (Cloudinary)
 app.use(express.urlencoded({ extended: true }));
-app.use('/image', express.static(path.join(__dirname, 'image')));
-const uploadDir = path.join(__dirname, 'image');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'image/'); // Save images in "uploads" folder
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = Date.now() + path.extname(file.originalname);
-    cb(null, uniqueName); // Unique filename
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'food-app/food-images',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 800, height: 800, crop: 'limit' }],
   },
 });
 const upload = multer({ storage });
@@ -437,13 +441,14 @@ app.post('/api/v1/add-vendor', verifyToken, requireRole('vendor'), (req, res) =>
 app.post('/api/v1/food-set', verifyToken, requireRole('vendor'), upload.single('food_img'), (req, res) => {
   const { food_name, cost, food_type, food_description } = req.body;
   const vendor_id = req.user.user_id;
-  const food_img = req.file ? `${req.file.filename}` : null; // ✅ Store image path
+  const food_img = req.file ? req.file.path : null; // ✅ Cloudinary URL
+  const food_img_public_id = req.file ? req.file.filename : null; // ✅ Cloudinary public_id (for later deletion)
   if (!food_name || !cost) {
     return res.status(400).json({ message: 'All fields are required' });
   }
 
-  const sql = `INSERT INTO food (food_name, cost, food_img, food_type,food_description,vendor_id) VALUES (?, ?, ?, ?, ?, ?)`;
-  db.query(sql, [food_name, cost, food_img, food_type, food_description, vendor_id], (err, result) => {
+  const sql = `INSERT INTO food (food_name, cost, food_img, food_img_public_id, food_type, food_description, vendor_id) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  db.query(sql, [food_name, cost, food_img, food_img_public_id, food_type, food_description, vendor_id], (err, result) => {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).json({ message: 'Database error' });
@@ -466,7 +471,8 @@ const verifyFoodOwnership = (food_id, vendor_id, callback) => {
 // Helper for food update logic
 const handleFoodUpdate = (req, res) => {
   const { food_id, food_name, cost, food_type, food_description } = req.body;
-  const food_img = req.file ? `${req.file.filename}` : null;
+  const food_img = req.file ? req.file.path : null; // ✅ Cloudinary URL
+  const food_img_public_id = req.file ? req.file.filename : null; // ✅ Cloudinary public_id
 
   if (!food_id || !food_name || !cost) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -479,29 +485,46 @@ const handleFoodUpdate = (req, res) => {
       return res.status(403).json({ error: "Forbidden. You do not own this food item." });
     }
 
-    let sql;
-    let values;
-
+    // If a new image was uploaded, delete the old one from Cloudinary first
     if (food_img) {
-      sql = "UPDATE food SET food_name = ?, cost = ?, food_img = ?, food_type = ?, food_description = ? WHERE food_id = ?";
-      values = [food_name, parseFloat(cost), food_img, food_type, food_description, food_id];
+      db.query("SELECT food_img_public_id FROM food WHERE food_id = ?", [food_id], (selErr, selResults) => {
+        const oldPublicId = selResults && selResults.length > 0 ? selResults[0].food_img_public_id : null;
+        if (oldPublicId) {
+          cloudinary.uploader.destroy(oldPublicId, (cErr) => {
+            if (cErr) console.error("Cloudinary delete (old image) error:", cErr);
+          });
+        }
+        performUpdate();
+      });
     } else {
-      sql = "UPDATE food SET food_name = ?, cost = ?, food_type = ?, food_description = ? WHERE food_id = ?";
-      values = [food_name, parseFloat(cost), food_type, food_description, food_id];
+      performUpdate();
     }
 
-    db.query(sql, values, (err, result) => {
-      if (err) {
-        console.error("Update Error:", err);
-        return res.status(500).json({ message: "Database update failed" });
+    function performUpdate() {
+      let sql;
+      let values;
+
+      if (food_img) {
+        sql = "UPDATE food SET food_name = ?, cost = ?, food_img = ?, food_img_public_id = ?, food_type = ?, food_description = ? WHERE food_id = ?";
+        values = [food_name, parseFloat(cost), food_img, food_img_public_id, food_type, food_description, food_id];
+      } else {
+        sql = "UPDATE food SET food_name = ?, cost = ?, food_type = ?, food_description = ? WHERE food_id = ?";
+        values = [food_name, parseFloat(cost), food_type, food_description, food_id];
       }
 
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "Food item not found" });
-      }
+      db.query(sql, values, (err, result) => {
+        if (err) {
+          console.error("Update Error:", err);
+          return res.status(500).json({ message: "Database update failed" });
+        }
 
-      res.json({ message: "Food item updated successfully!" });
-    });
+        if (result.affectedRows === 0) {
+          return res.status(404).json({ message: "Food item not found" });
+        }
+
+        res.json({ message: "Food item updated successfully!" });
+      });
+    }
   });
 };
 
@@ -511,7 +534,7 @@ app.put('/api/v1/food-update', verifyToken, requireRole('vendor'), upload.single
 
 // Delete Food---->>>>
 const handleFoodDelete = (req, res) => {
-  const { food_id, food_img } = req.body;
+  const { food_id } = req.body;
 
   if (!food_id) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -524,30 +547,34 @@ const handleFoodDelete = (req, res) => {
       return res.status(403).json({ error: "Forbidden. You do not own this food item." });
     }
 
-    // Delete food item from database
-    const sql = "DELETE FROM food WHERE food_id = ?";
+    // Get the Cloudinary public_id before deleting the row
+    db.query("SELECT food_img_public_id FROM food WHERE food_id = ?", [food_id], (selErr, selResults) => {
+      const publicId = selResults && selResults.length > 0 ? selResults[0].food_img_public_id : null;
 
-    db.query(sql, [food_id], (err, result) => {
-      if (err) {
-        console.error("Delete Error:", err);
-        return res.status(500).json({ message: "Database delete failed" });
-      }
+      // Delete food item from database
+      const sql = "DELETE FROM food WHERE food_id = ?";
 
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "Food item not found" });
-      }
+      db.query(sql, [food_id], (err, result) => {
+        if (err) {
+          console.error("Delete Error:", err);
+          return res.status(500).json({ message: "Database delete failed" });
+        }
 
-      // Delete image from server if provided
-      if (food_img) {
-        const imagePath = path.join(__dirname, '../image/', food_img);
-        fs.unlink(imagePath, (err) => {
-          if (err) {
-            console.error("Image Delete Error:", err);
-          }
-        });
-      }
+        if (result.affectedRows === 0) {
+          return res.status(404).json({ message: "Food item not found" });
+        }
 
-      res.json({ message: "Food item deleted successfully!" });
+        // Delete image from Cloudinary if it exists
+        if (publicId) {
+          cloudinary.uploader.destroy(publicId, (cErr) => {
+            if (cErr) {
+              console.error("Cloudinary Delete Error:", cErr);
+            }
+          });
+        }
+
+        res.json({ message: "Food item deleted successfully!" });
+      });
     });
   });
 };
@@ -2514,4 +2541,3 @@ app.post('/api/v1/reject-udar', verifyToken, requireRole('vendor'), (req, res) =
     });
   });
 });
-

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-let host = '192.168.69.179';
+let host = '192.168.1.5';
 let port = '3000';
 
 try {
@@ -32,7 +32,7 @@ const getBaseIp = () => {
       return 'http://10.0.2.2:3000';
     }
   }
-  return `http://${host}:${port}`;
+  return `https://local-delivery-backend.up.railway.app`;
 };
 
 export const BASE_IP = getBaseIp();
