@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/authRoutes');
+const foodRoutes = require('./routes/foodRoutes');
 
 const app = express();
 
@@ -31,7 +32,8 @@ const authLimiter = rateLimit({
 app.use('/api/v1/login', authLimiter);
 app.use('/api/v1/otp', authLimiter);
 
-// Mount Auth Router
+// Mount Routers
 app.use('/api/v1', authRoutes);
+app.use('/api/v1', foodRoutes);
 
 module.exports = app;
