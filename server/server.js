@@ -109,27 +109,7 @@ app.get('/', (req, res) => {
 })
 
 
-// API GET FOOD ITEM
-app.get('/api/v1/food', (req, res) => {
-  const vendor_id = req.query.vendor_id; // ✅ FIXED: Extract vendor_id safely
-  console.log("id", vendor_id);
 
-  if (!vendor_id) {
-    return res.status(400).json({ error: 'Missing vendor_id parameter' });
-  }
-  const sql = `SELECT food_id,food_name,cost,food_img ,food_type,food_description,is_available from food where vendor_id=?`;
-  db.query(sql, [vendor_id], (err, results) => {
-    if (err) {
-      console.error('Error fetching data:', err);
-      return res.status(500).json({ error: 'Internal Server Error' });
-    }
-
-    if (results.length === 0) {
-      return res.status(404).json({ message: 'No food items found' });
-    }
-    res.json(results);
-  });
-});
 
 
 
@@ -208,151 +188,9 @@ app.post('/api/v1/add-vendor', verifyToken, requireRole('vendor'), (req, res) =>
 
 
 
-// add-food
-app.post('/api/v1/food-set', verifyToken, requireRole('vendor'), upload.single('food_img'), (req, res) => {
-  const { food_name, cost, food_type, food_description } = req.body;
-  const vendor_id = req.user.user_id;
-  const food_img = req.file ? req.file.path : null; // ✅ Cloudinary URL
-  const food_img_public_id = req.file ? req.file.filename : null; // ✅ Cloudinary public_id (for later deletion)
-  if (!food_name || !cost) {
-    return res.status(400).json({ message: 'All fields are required' });
-  }
 
-  const sql = `INSERT INTO food (food_name, cost, food_img, food_img_public_id, food_type, food_description, vendor_id) VALUES (?, ?, ?, ?, ?, ?, ?)`;
-  db.query(sql, [food_name, cost, food_img, food_img_public_id, food_type, food_description, vendor_id], (err, result) => {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ message: 'Database error' });
-    }
 
-    res.json({ message: 'Food item added successfully!', food_id: result.insertId });
-  });
-});
 
-// Helper to verify that a food item belongs to the authenticated vendor
-const verifyFoodOwnership = (food_id, vendor_id, callback) => {
-  db.query("SELECT vendor_id FROM food WHERE food_id = ?", [food_id], (err, results) => {
-    if (err) return callback(err, null);
-    if (results.length === 0) return callback(null, false);
-    const belongs = parseInt(results[0].vendor_id) === parseInt(vendor_id);
-    callback(null, belongs);
-  });
-};
-
-// Helper for food update logic
-const handleFoodUpdate = (req, res) => {
-  const { food_id, food_name, cost, food_type, food_description } = req.body;
-  const food_img = req.file ? req.file.path : null; // ✅ Cloudinary URL
-  const food_img_public_id = req.file ? req.file.filename : null; // ✅ Cloudinary public_id
-
-  if (!food_id || !food_name || !cost) {
-    return res.status(400).json({ message: "Missing required fields" });
-  }
-
-  // Verify that the food item belongs to the logged-in vendor
-  verifyFoodOwnership(food_id, req.user.user_id, (err, owns) => {
-    if (err) return res.status(500).json({ message: "Database error" });
-    if (!owns) {
-      return res.status(403).json({ error: "Forbidden. You do not own this food item." });
-    }
-
-    // If a new image was uploaded, delete the old one from Cloudinary first
-    if (food_img) {
-      db.query("SELECT food_img_public_id FROM food WHERE food_id = ?", [food_id], (selErr, selResults) => {
-        const oldPublicId = selResults && selResults.length > 0 ? selResults[0].food_img_public_id : null;
-        if (oldPublicId) {
-          cloudinary.uploader.destroy(oldPublicId, (cErr) => {
-            if (cErr) console.error("Cloudinary delete (old image) error:", cErr);
-          });
-        }
-        performUpdate();
-      });
-    } else {
-      performUpdate();
-    }
-
-    function performUpdate() {
-      let sql;
-      let values;
-
-      if (food_img) {
-        sql = "UPDATE food SET food_name = ?, cost = ?, food_img = ?, food_img_public_id = ?, food_type = ?, food_description = ? WHERE food_id = ?";
-        values = [food_name, parseFloat(cost), food_img, food_img_public_id, food_type, food_description, food_id];
-      } else {
-        sql = "UPDATE food SET food_name = ?, cost = ?, food_type = ?, food_description = ? WHERE food_id = ?";
-        values = [food_name, parseFloat(cost), food_type, food_description, food_id];
-      }
-
-      db.query(sql, values, (err, result) => {
-        if (err) {
-          console.error("Update Error:", err);
-          return res.status(500).json({ message: "Database update failed" });
-        }
-
-        if (result.affectedRows === 0) {
-          return res.status(404).json({ message: "Food item not found" });
-        }
-
-        res.json({ message: "Food item updated successfully!" });
-      });
-    }
-  });
-};
-
-// EDIT FOOD---->>>>>
-app.post('/api/v1/food-update', verifyToken, requireRole('vendor'), upload.single('food_img'), handleFoodUpdate);
-app.put('/api/v1/food-update', verifyToken, requireRole('vendor'), upload.single('food_img'), handleFoodUpdate);
-
-// Delete Food---->>>>
-const handleFoodDelete = (req, res) => {
-  const { food_id } = req.body;
-
-  if (!food_id) {
-    return res.status(400).json({ message: "Missing required fields" });
-  }
-
-  // Verify that the food item belongs to the logged-in vendor
-  verifyFoodOwnership(food_id, req.user.user_id, (err, owns) => {
-    if (err) return res.status(500).json({ message: "Database error" });
-    if (!owns) {
-      return res.status(403).json({ error: "Forbidden. You do not own this food item." });
-    }
-
-    // Get the Cloudinary public_id before deleting the row
-    db.query("SELECT food_img_public_id FROM food WHERE food_id = ?", [food_id], (selErr, selResults) => {
-      const publicId = selResults && selResults.length > 0 ? selResults[0].food_img_public_id : null;
-
-      // Delete food item from database
-      const sql = "DELETE FROM food WHERE food_id = ?";
-
-      db.query(sql, [food_id], (err, result) => {
-        if (err) {
-          console.error("Delete Error:", err);
-          return res.status(500).json({ message: "Database delete failed" });
-        }
-
-        if (result.affectedRows === 0) {
-          return res.status(404).json({ message: "Food item not found" });
-        }
-
-        // Delete image from Cloudinary if it exists
-        if (publicId) {
-          cloudinary.uploader.destroy(publicId, (cErr) => {
-            if (cErr) {
-              console.error("Cloudinary Delete Error:", cErr);
-            }
-          });
-        }
-
-        res.json({ message: "Food item deleted successfully!" });
-      });
-    });
-  });
-};
-
-app.delete('/api/v1/food-delete', verifyToken, requireRole('vendor'), handleFoodDelete);
-app.post('/api/v1/food-delete', verifyToken, requireRole('vendor'), handleFoodDelete);
-app.use('/api/v1/food-delete', verifyToken, requireRole('vendor'), handleFoodDelete);
 
 
 // ------->>>>>>>>fetch all vendors
