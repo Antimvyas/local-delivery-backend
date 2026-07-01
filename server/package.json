@@ -7,7 +7,7 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "test": "node scripts/test_comprehensive_auth_regression.js",
+    "test": "node tests/auth.test.js",
     "start": "nodemon server.js"
   },
   "dependencies": {
