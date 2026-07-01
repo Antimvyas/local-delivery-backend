@@ -62,7 +62,7 @@ api.interceptors.response.use(
           disconnectSocket();
           await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'userId', 'userRole']);
           showError("Please login again.", "Session Expired");
-          const { navigationRef } = require('../App');
+          const { navigationRef } = require('./navigation');
           if (navigationRef && navigationRef.isReady()) {
             navigationRef.navigate('Login');
           }

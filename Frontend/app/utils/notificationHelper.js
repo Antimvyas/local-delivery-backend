@@ -93,7 +93,7 @@ export const handleNotificationNavigation = (data) => {
   const { type, screen, role, user_id } = data;
   console.log(`Navigating from notification tap. Type: ${type}, Screen: ${screen}`);
 
-  const { navigationRef } = require('../App');
+  const { navigationRef } = require('./navigation');
   if (!navigationRef || !navigationRef.isReady()) {
     // Retry if navigator is not fully initialized
     setTimeout(() => handleNotificationNavigation(data), 500);

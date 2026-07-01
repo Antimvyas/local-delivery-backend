@@ -37,10 +37,8 @@ import Toast from 'react-native-toast-message';
 import CustomerOtpAuth from './compoent/CustomerOtpAuth.js';
 
 import { registerFcmTokenWithServer, displayLocalNotification, handleNotificationNavigation } from './utils/notificationHelper';
-
 import GlobalNotificationProvider from './compoent/common/GlobalNotificationProvider';
-
-export const navigationRef = createNavigationContainerRef();
+import { navigationRef } from './utils/navigation';
 
 const Stack = createNativeStackNavigator();
 
