@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -28,8 +28,22 @@ const CustomerOtpAuth = () => {
   const [name, setName] = useState('');
   const [step, setStep] = useState(1); // 1 = Phone, 2 = OTP, 3 = New Profile Setup
   const [loading, setLoading] = useState(false);
+  const [timer, setTimer] = useState(0);
+  const [otpSentAt, setOtpSentAt] = useState(null);
+  const timerRef = useRef(null);
   const navigation = useNavigation();
   const { checkUserSession } = useNotification() || {};
+
+  useEffect(() => {
+    if (timer > 0) {
+      timerRef.current = setTimeout(() => {
+        setTimer(timer - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [timer]);
 
   const handleSendOtp = async () => {
     if (!phone || phone.length !== 10) {
@@ -43,6 +57,8 @@ const CustomerOtpAuth = () => {
       if (response.data.success) {
         showSuccess('OTP sent successfully (Mock OTP is 123456)');
         setStep(2);
+        setTimer(30);
+        setOtpSentAt(Date.now());
       }
     } catch (error) {
       console.error('Send OTP Error:', error);
@@ -56,6 +72,15 @@ const CustomerOtpAuth = () => {
     if (!otp || otp.length !== 6) {
       showError('Please enter the 6-digit verification code.');
       return;
+    }
+
+    // Expiry Guard: 60 seconds limit
+    if (otpSentAt) {
+      const elapsedSeconds = (Date.now() - otpSentAt) / 1000;
+      if (elapsedSeconds > 60) {
+        showError('The verification code has expired. Please request a new one.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -181,6 +206,15 @@ const CustomerOtpAuth = () => {
               loading={loading}
               style={styles.actionBtn}
             />
+            <TouchableOpacity 
+              onPress={handleSendOtp} 
+              disabled={timer > 0} 
+              style={[styles.resendBtn, timer > 0 && styles.resendBtnDisabled]}
+            >
+              <Text style={styles.resendBtnText}>
+                {timer > 0 ? `Resend OTP in ${timer}s` : 'Resend OTP'}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setStep(1)} style={styles.backLink}>
               <Text style={styles.backLinkText}>Change mobile number</Text>
             </TouchableOpacity>
@@ -279,8 +313,21 @@ const styles = StyleSheet.create({
   actionBtn: {
     marginTop: spacing.md,
   },
-  backLink: {
+  resendBtn: {
     marginTop: spacing.md,
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  resendBtnDisabled: {
+    opacity: 0.6,
+  },
+  resendBtnText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary,
+    fontWeight: typography.fontWeight.bold,
+  },
+  backLink: {
+    marginTop: spacing.sm,
     alignItems: 'center',
   },
   backLinkText: {
