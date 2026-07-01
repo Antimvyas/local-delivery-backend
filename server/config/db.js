@@ -19,8 +19,50 @@ if (process.env.DATABASE_URL) {
   });
 }
 
+let customerTable = (process.env.DATABASE_URL || process.env.MYSQLHOST) ? 'customers' : 'customer';
+
 console.log('Connected to MySQL connection pool.');
 
+pool.query('SHOW TABLES', (err, results) => {
+  if (err) {
+    console.error('Database tables query failed:', err.message);
+  } else if (results && results.length > 0) {
+    // Determine table names from the results object array
+    const tableNames = results.map(row => Object.values(row)[0].toLowerCase());
+    if (tableNames.includes('customers')) {
+      customerTable = 'customers';
+      console.log('Database table mapping detected: using "customers" (plural)');
+    } else {
+      customerTable = 'customer';
+      console.log('Database table mapping detected: using "customer" (singular)');
+    }
+  }
+});
+
+// Wrap query and execute methods to dynamically adapt table references in sql queries
+const wrapSql = (sql) => {
+  if (typeof sql === 'string' && customerTable === 'customers') {
+    return sql.replace(/\bcustomer\b/g, 'customers');
+  }
+  if (sql && typeof sql.sql === 'string' && customerTable === 'customers') {
+    sql.sql = sql.sql.replace(/\bcustomer\b/g, 'customers');
+  }
+  return sql;
+};
+
+const originalQuery = pool.query;
+pool.query = function (sql, values, cb) {
+  const finalSql = wrapSql(sql);
+  return originalQuery.call(this, finalSql, values, cb);
+};
+
+const originalExecute = pool.execute;
+pool.execute = function (sql, values, cb) {
+  const finalSql = wrapSql(sql);
+  return originalExecute.call(this, finalSql, values, cb);
+};
+
+// Initial simple connection ping
 pool.query('SELECT 1', (err) => {
   if (err) {
     console.error('Database connection test failed:', err.message);
@@ -30,3 +72,4 @@ pool.query('SELECT 1', (err) => {
 });
 
 module.exports = pool;
+
