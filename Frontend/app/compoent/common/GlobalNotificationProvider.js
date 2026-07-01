@@ -19,6 +19,7 @@ export const useNotification = () => useContext(NotificationContext);
 
 export const GlobalNotificationProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null); // { user_id, role }
+  console.log("[RENDER TRACE] GlobalNotificationProvider Rendered. currentUser =", currentUser);
   const [newOrder, setNewOrder] = useState(null);
   const [newPayment, setNewPayment] = useState(null);
   const [customerOrderUpdate, setCustomerOrderUpdate] = useState(null);

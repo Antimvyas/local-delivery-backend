@@ -46,6 +46,8 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [initialRoute, setInitialRoute] = useState("Welcome");
 
+  console.log("[RENDER TRACE] App Component Rendered. isLoading =", isLoading, "initialRoute =", initialRoute);
+
   useEffect(() => {
     const checkToken = async () => {
       try {
