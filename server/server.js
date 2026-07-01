@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -12,7 +13,6 @@ const { log } = require('console');
 const { close } = require('inspector/promises');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
 const logger = require('./utils/logger');
 const { saveFcmToken, deleteFcmToken, sendPushNotification } = require('./utils/notifications.js');
 

@@ -21,4 +21,12 @@ if (process.env.DATABASE_URL) {
 
 console.log('Connected to MySQL connection pool.');
 
+pool.query('SELECT 1', (err) => {
+  if (err) {
+    console.error('Database connection test failed:', err.message);
+  } else {
+    console.log('Database connection test passed successfully.');
+  }
+});
+
 module.exports = pool;
