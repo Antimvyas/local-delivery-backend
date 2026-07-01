@@ -36,15 +36,4 @@ app.use('/api/v1/otp', authLimiter);
 app.use('/api/v1', authRoutes);
 app.use('/api/v1', foodRoutes);
 
-app.get('/api/v1/test-db', (req, res) => {
-  res.json({
-    host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
-    user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
-    database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'App',
-    port: process.env.MYSQLPORT || process.env.DB_PORT || '3306',
-    hasPassword: !!(process.env.MYSQLPASSWORD || process.env.DB_PASSWORD),
-    hasDatabaseUrl: !!process.env.DATABASE_URL
-  });
-});
-
 module.exports = app;
