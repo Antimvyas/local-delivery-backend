@@ -34,4 +34,8 @@ app.use('/api/v1/otp', authLimiter);
 // Mount Auth Router
 app.use('/api/v1', authRoutes);
 
+app.get('/api/v1/debug-env', (req, res) => {
+  res.json({ keys: Object.keys(process.env) });
+});
+
 module.exports = app;
