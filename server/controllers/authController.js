@@ -107,10 +107,18 @@ exports.login = async (req, res, next) => {
   }
 };
 
-exports.sendOtp = (req, res, next) => {
+exports.sendOtp = async (req, res, next) => {
   try {
     const { phone } = req.body;
-    logger.info(`[MOCK OTP] Sending code 123456 to +91 ${phone}`);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = Date.now() + 5 * 60 * 1000;
+    
+    otpCache.set(phone, { otp, expiry });
+
+    const message = `Your Local Delivery App verification code is: ${otp}. Valid for 5 minutes.`;
+    await smsService.sendSMS(phone, message);
+
+    logger.info(`[OTP] Sent code ${otp} to ${phone}`);
     return sendSuccess(res, 'OTP sent successfully', { phone });
   } catch (err) {
     next(err);
@@ -120,8 +128,23 @@ exports.sendOtp = (req, res, next) => {
 exports.verifyOtp = async (req, res, next) => {
   try {
     const { phone, otp } = req.body;
-    if (otp !== '123456') {
-      return res.status(400).json({ success: false, message: 'Invalid verification code' });
+    const record = otpCache.get(phone);
+
+    const hasCredentials = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER;
+    const isMockBypass = !hasCredentials && otp === '123456';
+
+    if (!isMockBypass) {
+      if (!record) {
+        return res.status(400).json({ success: false, message: 'No OTP requested for this phone number' });
+      }
+      if (Date.now() > record.expiry) {
+        otpCache.delete(phone);
+        return res.status(400).json({ success: false, message: 'Verification code has expired' });
+      }
+      if (record.otp !== otp) {
+        return res.status(400).json({ success: false, message: 'Invalid verification code' });
+      }
+      otpCache.delete(phone);
     }
 
     const customer = await authRepository.findCustomerByPhone(phone);
