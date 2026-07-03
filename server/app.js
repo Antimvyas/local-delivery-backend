@@ -36,4 +36,19 @@ app.use('/api/v1/otp', authLimiter);
 app.use('/api/v1', authRoutes);
 app.use('/api/v1', foodRoutes);
 
+// Global Error Handler Middleware
+app.use((err, req, res, next) => {
+  console.error('Global Error Handler caught:', err);
+  res.status(500).json({
+    success: false,
+    message: err.message || 'An internal server error occurred',
+    errorCode: err.code || 'INTERNAL_ERROR',
+    stack: err.stack,
+    sqlState: err.sqlState,
+    sqlMessage: err.sqlMessage,
+    sql: err.sql
+  });
+});
+
 module.exports = app;
+

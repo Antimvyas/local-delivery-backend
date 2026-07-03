@@ -1,3 +1,5 @@
-import { createNavigationContainerRef } from '@react-navigation/native';
+const { createNavigationContainerRef } = require('@react-navigation/native');
 
-export const navigationRef = createNavigationContainerRef();
+const navigationRef = createNavigationContainerRef();
+
+module.exports = { navigationRef };

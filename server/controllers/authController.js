@@ -2,6 +2,12 @@ const authRepository = require('../repositories/authRepository');
 const authService = require('../services/authService');
 const logger = require('../utils/logger');
 const { deleteFcmToken, saveFcmToken } = require('../utils/notifications');
+const smsService = require('../services/smsService');
+
+if (!global.otpCache) {
+  global.otpCache = new Map();
+}
+const otpCache = global.otpCache;
 
 // Simple response formatting helper
 const sendSuccess = (res, message, data, status = 200) => {

@@ -131,6 +131,15 @@ const Login = () => {
           style={styles.loginBtn}
         />
 
+        {selectedOption === 'customer' && (
+          <TouchableOpacity 
+            onPress={() => navigation.navigate("CustomerOtpAuth")} 
+            style={styles.otpBtn}
+          >
+            <Text style={styles.otpBtnText}>Or Sign In with Mobile OTP</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity onPress={() => navigation.navigate("SignUp")} style={styles.signUpLinkContainer}>
           <Text style={styles.signUpText}>
             Don't have an account? <Text style={styles.signUpLink}>Sign Up</Text>
@@ -199,6 +208,21 @@ const styles = StyleSheet.create({
   },
   loginBtn: {
     marginTop: spacing.md,
+  },
+  otpBtn: {
+    marginTop: spacing.md,
+    backgroundColor: 'rgba(255, 107, 53, 0.1)',
+    borderRadius: 12,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 53, 0.3)',
+  },
+  otpBtnText: {
+    color: colors.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
   },
   signUpLinkContainer: {
     marginTop: spacing.md,
