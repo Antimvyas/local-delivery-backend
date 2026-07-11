@@ -1,37 +1,38 @@
 const logger = require('../utils/logger');
 
+// Format phone number to E.164
+const formatPhone = (phone) => {
+  let formatted = phone.trim();
+  if (!formatted.startsWith('+')) {
+    if (formatted.length === 10) {
+      formatted = `+91${formatted}`;
+    } else {
+      formatted = `+${formatted}`;
+    }
+  }
+  return formatted;
+};
+
 /**
- * Sends an SMS message to a phone number.
- * Integrates with Twilio API using native fetch.
- * If credentials are not set, it falls back to mock logging.
+ * Sends a verification code using Twilio Verify API.
  */
-exports.sendSMS = async (to, body) => {
+exports.sendVerificationOtp = async (to) => {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+  const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
-  if (!accountSid || !authToken || !fromNumber) {
-    logger.warn(`[SMS MOCK] Twilio credentials missing. Logging OTP message: "${body}" to ${to}`);
+  if (!accountSid || !authToken || !serviceSid) {
+    logger.warn(`[SMS MOCK] Twilio Verify credentials missing. Mocking verification request to ${to}`);
     return { success: true, mock: true };
   }
 
-  // Format recipient number to E.164 if it does not start with +
-  let formattedTo = to.trim();
-  if (!formattedTo.startsWith('+')) {
-    if (formattedTo.length === 10) {
-      formattedTo = `+91${formattedTo}`;
-    } else {
-      formattedTo = `+${formattedTo}`;
-    }
-  }
-
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const formattedTo = formatPhone(to);
+  const url = `https://verify.twilio.com/v2/Services/${serviceSid}/Verifications`;
   const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
 
   const params = new URLSearchParams();
   params.append('To', formattedTo);
-  params.append('From', fromNumber);
-  params.append('Body', body);
+  params.append('Channel', 'sms');
 
   try {
     const response = await fetch(url, {
@@ -45,14 +46,66 @@ exports.sendSMS = async (to, body) => {
 
     const data = await response.json();
     if (!response.ok) {
-      logger.error('Twilio SMS sending failed:', data);
-      throw new Error(data.message || 'Failed to send SMS via Twilio');
+      logger.error('Twilio Verify request failed:', data);
+      throw new Error(data.message || 'Failed to request verification via Twilio');
     }
 
-    logger.info(`SMS sent successfully via Twilio: SID=${data.sid} to ${formattedTo}`);
+    logger.info(`Twilio Verify request successfully sent to ${formattedTo}: status=${data.status}`);
     return { success: true, sid: data.sid };
   } catch (error) {
-    logger.error('Error in SMS service:', error.message);
+    logger.error('Error in Twilio Verify send service:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * Validates a verification code using Twilio Verify API.
+ */
+exports.checkVerificationOtp = async (to, code) => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
+
+  if (!accountSid || !authToken || !serviceSid) {
+    logger.warn(`[SMS MOCK] Twilio Verify credentials missing. Mocking verification check for ${to}`);
+    if (code === '123456') {
+      return { success: true, mock: true };
+    }
+    throw new Error('Invalid verification code');
+  }
+
+  const formattedTo = formatPhone(to);
+  const url = `https://verify.twilio.com/v2/Services/${serviceSid}/VerificationCheck`;
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+
+  const params = new URLSearchParams();
+  params.append('To', formattedTo);
+  params.append('Code', code);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      logger.error('Twilio Verify check failed:', data);
+      throw new Error(data.message || 'Failed to check verification via Twilio');
+    }
+
+    if (data.status !== 'approved') {
+      throw new Error('Invalid verification code');
+    }
+
+    logger.info(`Twilio Verify check approved for ${formattedTo}`);
+    return { success: true };
+  } catch (error) {
+    logger.error('Error in Twilio Verify check service:', error.message);
     throw error;
   }
 };

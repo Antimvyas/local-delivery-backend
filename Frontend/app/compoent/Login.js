@@ -36,7 +36,7 @@ const Login = () => {
       showError('All fields are required.');
       return;
     }
-  
+
     setLoading(true);
     try {
       const response = await api.post('/login', {
@@ -44,37 +44,40 @@ const Login = () => {
         password,
         role: selectedOption,
       });
-  
+
       console.log('Login Response:', response.data);
-   
-  
+
+
       if (response.data.success) {
         showSuccess('Logged in successfully!');
         const authData = response.data.data;
-        
+
         await AsyncStorage.setItem('accessToken', authData.accessToken);
         await AsyncStorage.setItem('refreshToken', authData.refreshToken);
         await AsyncStorage.setItem('userRole', authData.role);
         await AsyncStorage.setItem('userId', String(authData.user_id));
-  
+
         await connectSocket();
         await registerFcmTokenWithServer();
         if (checkUserSession) {
           await checkUserSession();
         }
-    console.log('Login Response', response.data);
+        console.log('Login Response', response.data);
         // Clear inputs after success
         setPassword("");
         setUsername('');
-  
+
         if (selectedOption === 'customer') {
           navigation.navigate('CustomerDashboard', { customer_id: authData.customer_id });
         } else if (selectedOption === 'vendor') {
           navigation.navigate('VendorDashboard', { vendor_id: authData.vendor_id });
         }
-      } 
+      }
     } catch (error) {
       console.error('Login Error:', error);
+      console.log("Status:", error.response?.status);
+      console.log("Response:", error.response?.data);
+      console.log("Request:", error.config?.data);
       showError(error);
     } finally {
       setLoading(false);
@@ -124,17 +127,17 @@ const Login = () => {
           autoCapitalize="none"
         />
 
-        <PrimaryButton 
-          title="Login" 
-          onPress={handleLogin} 
+        <PrimaryButton
+          title="Login"
+          onPress={handleLogin}
           loading={loading}
           disabled={!selectedOption}
           style={styles.loginBtn}
         />
 
         {selectedOption === 'customer' && (
-          <TouchableOpacity 
-            onPress={() => navigation.navigate("CustomerOtpAuth")} 
+          <TouchableOpacity
+            onPress={() => navigation.navigate("CustomerOtpAuth")}
             style={styles.otpBtn}
           >
             <Text style={styles.otpBtnText}>Or Sign In with Mobile OTP</Text>
