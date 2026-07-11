@@ -46,6 +46,7 @@ const Login = () => {
       });
   
       console.log('Login Response:', response.data);
+   
   
       if (response.data.success) {
         showSuccess('Logged in successfully!');
@@ -61,7 +62,7 @@ const Login = () => {
         if (checkUserSession) {
           await checkUserSession();
         }
-
+    console.log('Login Response', response.data);
         // Clear inputs after success
         setPassword("");
         setUsername('');
