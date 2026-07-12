@@ -75,7 +75,7 @@ exports.checkVerificationOtp = async (to, code) => {
   }
 
   const formattedTo = formatPhone(to);
-  const url = `https://verify.twilio.com/v2/Services/${serviceSid}/VerificationCheck`;
+  const url = `https://verify.twilio.com/v2/Services/${serviceSid}/VerificationChecks`;
   const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
 
   const params = new URLSearchParams();
