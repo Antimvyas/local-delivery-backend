@@ -69,41 +69,97 @@ exports.register = async (req, res, next) => {
 
 exports.login = async (req, res, next) => {
   try {
-    const { username, password, role } = req.body;
-    const cleanRole = role.toLowerCase();
-    const table = cleanRole === 'customer' ? 'customer' : 'vendor';
-    const idField = cleanRole === 'vendor' ? 'vendor_id' : 'customer_id';
+    console.log("===== LOGIN START =====");
 
-    const users = await authRepository.findUserByUsernameOrPhone(table, username, username);
+    const { username, password, role } = req.body;
+
+    console.log("Request Body:", req.body);
+
+    const cleanRole = role.toLowerCase();
+    const table = cleanRole === "customer" ? "customer" : "vendor";
+    const idField = cleanRole === "vendor" ? "vendor_id" : "customer_id";
+
+    console.log("Searching user...");
+
+    const users = await authRepository.findUserByUsernameOrPhone(
+      table,
+      username,
+      username
+    );
+
+    console.log("DB Result:", users);
+
     if (!users || users.length === 0) {
-      return res.status(401).json({ success: false, message: 'Username or phone not found' });
+      return res.status(401).json({
+        success: false,
+        message: "Username or phone not found",
+      });
     }
 
     const dbUser = users[0];
-    const isMatch = await authService.comparePasswords(password, dbUser.password);
+
+    console.log("Comparing password...");
+
+    const isMatch = await authService.comparePasswords(
+      password,
+      dbUser.password
+    );
+
+    console.log("Password Match:", isMatch);
+
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Incorrect password' });
+      return res.status(401).json({
+        success: false,
+        message: "Incorrect password",
+      });
     }
 
     const userId = dbUser[idField];
-    const accessToken = authService.generateAccessToken(userId, cleanRole);
-    const refreshToken = authService.generateRefreshToken(userId, cleanRole);
-    const hashedRefreshToken = await authService.hashPassword(refreshToken);
 
-    await authRepository.updateRefreshToken(table, idField, userId, hashedRefreshToken);
+    console.log("Generating JWT...");
 
-    logger.info(`User logged in: userId=${userId}, role=${cleanRole}`);
+    const accessToken = authService.generateAccessToken(
+      userId,
+      cleanRole
+    );
 
-    return sendSuccess(res, 'Login successful', {
+    const refreshToken = authService.generateRefreshToken(
+      userId,
+      cleanRole
+    );
+
+    console.log("Hashing refresh token...");
+
+    const hashedRefreshToken =
+      await authService.hashPassword(refreshToken);
+
+    console.log("Updating DB...");
+
+    await authRepository.updateRefreshToken(
+      table,
+      idField,
+      userId,
+      hashedRefreshToken
+    );
+
+    console.log("Login Success");
+
+    return sendSuccess(res, "Login successful", {
       user_id: userId,
       role: cleanRole,
-      customer_id: cleanRole === 'customer' ? userId : null,
-      vendor_id: cleanRole === 'vendor' ? userId : null,
+      customer_id: cleanRole === "customer" ? userId : null,
+      vendor_id: cleanRole === "vendor" ? userId : null,
       accessToken,
-      refreshToken
+      refreshToken,
     });
   } catch (err) {
-    next(err);
+    console.error("LOGIN ERROR:", err);
+    console.error(err.stack);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 

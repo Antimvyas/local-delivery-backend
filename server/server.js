@@ -1842,6 +1842,15 @@ app.put('/api/v1/customer/:id', verifyToken, requireRole('customer'), requireCus
 
 //  food
 
+const verifyFoodOwnership = (foodId, vendorId, callback) => {
+  db.query('SELECT vendor_id FROM food WHERE food_id = ?', [foodId], (err, results) => {
+    if (err) return callback(err, false);
+    if (results.length === 0) return callback(null, false);
+    const belongs = parseInt(results[0].vendor_id) === parseInt(vendorId);
+    callback(null, belongs);
+  });
+};
+
 // Fetch all food items for a vendor
 const handleToggleFood = (req, res) => {
   const { food_id } = req.params; // Get food_id from URL

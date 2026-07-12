@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, FlatList, StyleSheet, ActivityIndicator, Modal, TextInput, TouchableOpacity } from "react-native";
-import api from "../utils/api"; 
+import api from "../utils/api";
 import MyNavigation from "./MyNavigation.js";
 import { showError, showSuccess } from "../utils/toastHelper";
 import { colors } from "../theme/colors";
@@ -9,18 +9,19 @@ import { typography } from "../theme/typography";
 import PrimaryButton from "./common/PrimaryButton";
 import EmptyState from "./common/EmptyState";
 import StatusChip from "./common/StatusChip";
+import AppInput from "./common/AppInput";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Text from "../GlobalText";
-
+import SecondaryButton from "./common/SecondaryButton";
 export default function RequestUdarScreen({ route }) {
-  const { customer_id } = route.params || {};  
+  const { customer_id } = route.params || {};
 
   const [vendors, setVendors] = useState([]);
   const [udarAccounts, setUdarAccounts] = useState({});
   const [approvedAccounts, setApprovedAccounts] = useState({});
   const [requestingVendorId, setRequestingVendorId] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Credit Limit Modal states
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [creditLimit, setCreditLimit] = useState("5000");
@@ -81,18 +82,46 @@ export default function RequestUdarScreen({ route }) {
     }
 
     setRequestingVendorId(selectedVendorId);
+
     try {
-      await api.post(`/request-udar`, { 
-        customer_id, 
+
+      console.log("===== REQUEST UDAR =====");
+      console.log({
+        customer_id,
         vendor_id: selectedVendorId,
         credit_limit: parseFloat(limitVal) || 0.00
       });
+
+      const response = await api.post(`/request-udar`, {
+        customer_id,
+        vendor_id: selectedVendorId,
+        credit_limit: parseFloat(limitVal) || 0.00
+      });
+
+      console.log("Response:", response.data);
+
       showSuccess("Credit request successfully sent to the shopkeeper.", "Request Sent");
-      setUdarAccounts(prevState => ({ ...prevState, [selectedVendorId]: true }));
+
+      setUdarAccounts(prevState => ({
+        ...prevState,
+        [selectedVendorId]: true
+      }));
+
       setShowLimitModal(false);
+
     } catch (error) {
-      console.error("Error sending request:", error);
-      showError("Failed to send credit request.");
+
+      console.log("===== REQUEST UDAR ERROR =====");
+      console.log("Status:", error?.response?.status);
+      console.log("Data:", error?.response?.data);
+
+      console.error(error);
+
+      showError(
+        error?.response?.data?.message ||
+        "Failed to send credit request."
+      );
+
     } finally {
       setRequestingVendorId(null);
     }
@@ -140,8 +169,8 @@ export default function RequestUdarScreen({ route }) {
                 ) : udarAccounts[item.vendor_id] ? (
                   <StatusChip status="pending" style={styles.statusChip} />
                 ) : (
-                  <PrimaryButton 
-                    title="Request Credit" 
+                  <PrimaryButton
+                    title="Request Credit"
                     onPress={() => handleOpenLimitModal(item.vendor_id)}
                     loading={requestingVendorId === item.vendor_id}
                     disabled={requestingVendorId !== null}
@@ -154,7 +183,7 @@ export default function RequestUdarScreen({ route }) {
           )}
         />
       )}
-      <MyNavigation customer_id={customer_id}/>
+      <MyNavigation customer_id={customer_id} />
 
       {/* Limit Input Modal */}
       <Modal
@@ -196,10 +225,10 @@ export default function RequestUdarScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.background, 
-    padding: spacing.md 
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: spacing.md
   },
   centered: {
     flex: 1,
@@ -211,12 +240,12 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.textSecondary,
   },
-  header: { 
-    fontSize: typography.fontSize.lg, 
-    fontWeight: "bold", 
-    textAlign: "center", 
-    marginVertical: spacing.md, 
-    color: colors.textPrimary 
+  header: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginVertical: spacing.md,
+    color: colors.textPrimary
   },
   listContent: {
     paddingBottom: 90,
@@ -244,8 +273,8 @@ const styles = StyleSheet.create({
     flex: 0.8,
     alignItems: 'flex-end',
   },
-  vendorName: { 
-    fontSize: typography.fontSize.md, 
+  vendorName: {
+    fontSize: typography.fontSize.md,
     fontWeight: "bold",
     color: colors.textPrimary,
     marginBottom: 2,
@@ -254,7 +283,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.textSecondary,
   },
-  requestButton: { 
+  requestButton: {
     minHeight: 38,
     height: 38,
     paddingVertical: 0,

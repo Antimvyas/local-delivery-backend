@@ -4,6 +4,7 @@ import api from "../utils/api";
 import { showError, showSuccess } from '../utils/toastHelper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { connectSocket } from '../socket';
+import { registerFcmTokenWithServer } from '../utils/notificationHelper';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -33,7 +34,7 @@ const HomeScreen = ({ navigation }) => {
       showError("All fields are required.");
       return;
     }
-  
+
     setLoading(true);
     try {
       const response = await api.post(`/set-data`, {
@@ -41,14 +42,14 @@ const HomeScreen = ({ navigation }) => {
         username,
         Phone,
         password,
-        role: selectedOption,
+        selectedOption,
         customer_address: selectedOption === 'customer' ? customer_address : undefined,
       });
 
       if (response.data.success) {
         showSuccess("Account registered successfully!");
         const authData = response.data.data;
-        
+
         await AsyncStorage.setItem('accessToken', authData.accessToken);
         await AsyncStorage.setItem('refreshToken', authData.refreshToken);
         await AsyncStorage.setItem('userRole', authData.role);
@@ -151,8 +152,8 @@ const HomeScreen = ({ navigation }) => {
         />
 
         {selectedOption === 'customer' && (
-          <TouchableOpacity 
-            onPress={() => navigation.navigate("CustomerOtpAuth")} 
+          <TouchableOpacity
+            onPress={() => navigation.navigate("CustomerOtpAuth")}
             style={styles.otpBtn}
           >
             <Text style={styles.otpBtnText}>Or Sign Up with Mobile OTP</Text>
