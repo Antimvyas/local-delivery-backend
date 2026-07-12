@@ -36,7 +36,7 @@ const HomeScreen = ({ navigation }) => {
   
     setLoading(true);
     try {
-      const response = await api.post(`/signup`, {
+      const response = await api.post(`/set-data`, {
         Name,
         username,
         Phone,

@@ -120,7 +120,11 @@ exports.sendOtp = async (req, res, next) => {
 exports.verifyOtp = async (req, res, next) => {
   try {
     const { phone, otp } = req.body;
-    await smsService.checkVerificationOtp(phone, otp);
+    try {
+      await smsService.checkVerificationOtp(phone, otp);
+    } catch (err) {
+      return res.status(400).json({ success: false, message: err.message || 'Invalid verification code' });
+    }
 
     const customer = await authRepository.findCustomerByPhone(phone);
     if (customer) {
