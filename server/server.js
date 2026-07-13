@@ -88,7 +88,7 @@ io.on("connection", (socket) => {
       sendPushNotification(data.customer_id, 'customer', 'Order Rejected', `Your order #${data.order_id} has been rejected by the vendor.`, 'Order Rejected', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
     });
   });
-  socket.on("disconnect", () => {});
+  socket.on("disconnect", () => { });
 });
 
 // for IMAGE STORE (Cloudinary)
@@ -119,9 +119,9 @@ app.get('/', (req, res) => {
 
 // update vendor
 app.post('/api/v1/add-vendor', verifyToken, requireRole('vendor'), (req, res) => {
-  const { 
-    Shop_name, 
-    shop_address, 
+  const {
+    Shop_name,
+    shop_address,
     open_close_timings,
     shop_number,
     landmark,
@@ -161,8 +161,8 @@ app.post('/api/v1/add-vendor', verifyToken, requireRole('vendor'), (req, res) =>
   `;
 
   const params = [
-    Shop_name, 
-    shop_address, 
+    Shop_name,
+    shop_address,
     timingsJSON,
     shop_number || null,
     landmark || null,
@@ -236,7 +236,7 @@ app.post('/api/v1/orders', verifyToken, requireRole('customer'), (req, res) => {
         console.error('Error checking Udar:', udarErr);
         return res.status(500).json({ error: 'Failed to verify account' });
       }
-      
+
       // We still proceed even if not approved (as per original logic where it warning logs)
       if (udarResult.length === 0) {
         console.warn('Udar is not approved, but adding credit order.');
@@ -290,7 +290,7 @@ app.post('/api/v1/orders', verifyToken, requireRole('customer'), (req, res) => {
           `;
 
           connection.query(orderQuery, [
-            customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods, 
+            customer_id, vendor_id, total_cost, customers_location, customers_contact, payment_methods,
             receiver_name || null, receiver_phone || null
           ], (orderErr, orderResult) => {
             if (orderErr) {
@@ -396,10 +396,10 @@ app.post('/api/v1/orders', verifyToken, requireRole('customer'), (req, res) => {
                     res.status(500).json({ error: 'Failed to finalize order' });
                   });
                 }
-            
+
                 connection.release();
                 console.log("✅ Order committed to DB, now emitting WebSocket event...");
-            
+
                 // ✅ Emit FCM and Socket events for real-time order update AFTER commit
                 sendPushNotification(vendor_id, 'vendor', 'New Order Received', `You have received a new order of ₹${total_cost}.`, 'New Order', 'PendingOrder').catch(e => console.error('FCM error:', e));
                 io.to(`vendor_${vendor_id}`).emit('new-order', {
@@ -411,7 +411,7 @@ app.post('/api/v1/orders', verifyToken, requireRole('customer'), (req, res) => {
                   customers_contact,
                   payment_methods
                 });
-            
+
                 res.json({ message: 'Order placed successfully', order_id });
               });
             }
@@ -613,35 +613,35 @@ app.put('/api/v1/vendor/orders/update-status', verifyToken, requireRole('vendor'
 
     // Update the order status in the database
     db.query("UPDATE orders SET order_status = ? WHERE order_id = ?", [new_status, order_id], (err, result) => {
-    if (err) {
-      console.error("Error updating order status:", err);
-      return res.status(500).json({ error: "Internal Server Error" });
-    }
+      if (err) {
+        console.error("Error updating order status:", err);
+        return res.status(500).json({ error: "Internal Server Error" });
+      }
 
-    // Create an update payload
-    const updateData = {
-      order_id,
-      customer_id,
-      vendor_id,
-      status: new_status,
-    };
+      // Create an update payload
+      const updateData = {
+        order_id,
+        customer_id,
+        vendor_id,
+        status: new_status,
+      };
 
-    // Emit the update event to the customer and vendor rooms using Socket.io
-    io.to(`customer_${customer_id}`).emit('order-updated', updateData);
-    io.to(`vendor_${vendor_id}`).emit('order-updated', updateData);
-    if (new_status === 'accepted') {
-      sendPushNotification(customer_id, 'customer', 'Order Accepted', `Your order #${order_id} has been accepted.`, 'Order Accepted', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
-    } else if (new_status === 'Rejected' || new_status === 'rejected') {
-      sendPushNotification(customer_id, 'customer', 'Order Rejected', `Your order #${order_id} has been rejected.`, 'Order Rejected', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
-    } else if (new_status === 'delivered') {
-      sendPushNotification(customer_id, 'customer', 'Order Delivered', `Your order #${order_id} has been delivered!`, 'Order Delivered', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
-    } else if (new_status === 'cancelled') {
-      sendPushNotification(vendor_id, 'vendor', 'Order Cancelled', `Order #${order_id} has been cancelled.`, 'Order Cancelled', 'Orders').catch(e => console.error('FCM error:', e));
-    }
+      // Emit the update event to the customer and vendor rooms using Socket.io
+      io.to(`customer_${customer_id}`).emit('order-updated', updateData);
+      io.to(`vendor_${vendor_id}`).emit('order-updated', updateData);
+      if (new_status === 'accepted') {
+        sendPushNotification(customer_id, 'customer', 'Order Accepted', `Your order #${order_id} has been accepted.`, 'Order Accepted', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
+      } else if (new_status === 'Rejected' || new_status === 'rejected') {
+        sendPushNotification(customer_id, 'customer', 'Order Rejected', `Your order #${order_id} has been rejected.`, 'Order Rejected', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
+      } else if (new_status === 'delivered') {
+        sendPushNotification(customer_id, 'customer', 'Order Delivered', `Your order #${order_id} has been delivered!`, 'Order Delivered', 'MyOrdersScreen').catch(e => console.error('FCM error:', e));
+      } else if (new_status === 'cancelled') {
+        sendPushNotification(vendor_id, 'vendor', 'Order Cancelled', `Order #${order_id} has been cancelled.`, 'Order Cancelled', 'Orders').catch(e => console.error('FCM error:', e));
+      }
 
-    res.json({ message: "Order status updated", update: updateData });
+      res.json({ message: "Order status updated", update: updateData });
+    });
   });
-});
 });
 
 
@@ -902,43 +902,67 @@ app.get('/api/v1/check-udar', verifyToken, (req, res) => {
 
 
 
-app.get('/api/v1/customer-udar-accounts/:customer_id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
-  const { customer_id } = req.params;
+app.get(
+  '/api/v1/customer-udar-accounts/:customer_id',
+  verifyToken,
+  requireRole('customer'),
+  requireCustomerOwnership,
+  (req, res) => {
 
-  if (!customer_id) {
-    return res.status(400).json({ error: "Customer ID is required" });
-  }
+    const { customer_id } = req.params;
 
-  const query = `
-   select status,vendor_id from udar_requests where customer_id=?
-  `;
+    const query = `
+      SELECT vendor_id, status
+      FROM udar_requests
+      WHERE customer_id = ?
+    `;
 
-  db.query(query, [customer_id], (err, results) => {
-    if (err) {
-      console.error("❌ Database Error:", err);
-      return res.status(500).json({ error: "Internal Server Error" });
-    }
+    db.query(query, [customer_id], (err, results) => {
 
-    res.json(results); // ✅ Returns list of vendor_ids where customer already has an account
-    // console.log(results);
+      if (err) {
+        console.error(err);
+        return res.status(500).json({
+          success: false,
+          message: "Database Error"
+        });
+      }
+
+      return res.json({
+        success: true,
+        accounts: results
+      });
+
+    });
 
   });
-});
 
 
 
 // ✅ Fetch Udar Requests for Vendor
 app.get('/api/v1/udar-requests/:vendor_id', verifyToken, requireRole('vendor'), requireVendorOwnership, (req, res) => {
   const { vendor_id } = req.params;
-
   const query = `
-      SELECT ur.request_id, c.Name 
-      FROM udar_requests ur 
-      JOIN customer c ON ur.customer_id = c.customer_id 
-      WHERE ur.vendor_id = ? 
-      AND ur.status = 'pending'
-  `;
+SELECT
+    ur.request_id,
+    ur.customer_id,
+    ur.vendor_id,
+    ur.credit_limit,
+    ur.request_date,
+    ur.status,
 
+    c.Name AS customer_name,
+    c.Phone AS phone
+
+FROM udar_requests ur
+
+INNER JOIN customer c
+ON c.customer_id = ur.customer_id
+
+WHERE ur.vendor_id = ?
+AND ur.status='pending'
+
+ORDER BY ur.request_date DESC
+`;
   db.query(query, [vendor_id], (err, results) => {
     if (err) {
       console.error("Database error:", err);  // Logs the error for debugging
@@ -946,10 +970,16 @@ app.get('/api/v1/udar-requests/:vendor_id', verifyToken, requireRole('vendor'), 
     }
 
     if (results.length === 0) {
-      return res.status(404).json({ message: "No pending requests found" }); // Handle empty result set
+      return res.json({
+        success: true,
+        requests: []
+      });
     }
 
-    res.json(results); // Sends the customer names and request IDs to frontend
+    return res.json({
+      success: true,
+      requests: results
+    }); // Sends the customer names and request IDs to frontend
   });
 });
 
@@ -960,17 +990,36 @@ app.get('/api/v1/vendor-dashboard/:vendor_id', verifyToken, requireRole('vendor'
   console.log(vendor_id);
 
   const query = `
-      SELECT 
-          c.customer_id,
-          c.Name,
-          c.Phone,
-          c.customer_address,
-          SUM(a.balance_due) AS total_pending_amount
-      FROM account a
-      JOIN customer c ON a.customer_id = c.customer_id
-      WHERE a.vendor_id = ?
-      GROUP BY c.customer_id, c.Name, c.Phone, c.customer_address;
-  `;
+SELECT
+    c.customer_id,
+    c.Name,
+    c.Phone,
+    c.customer_address,
+    ur.credit_limit,
+
+    COALESCE(SUM(a.balance_due),0) AS total_pending_amount
+
+FROM udar_requests ur
+
+JOIN customer c
+ON ur.customer_id = c.customer_id
+
+LEFT JOIN account a
+ON a.customer_id = ur.customer_id
+AND a.vendor_id = ur.vendor_id
+
+WHERE ur.vendor_id = ?
+AND ur.status='accepted'
+
+GROUP BY
+c.customer_id,
+c.Name,
+c.Phone,
+c.customer_address,
+ur.credit_limit
+
+ORDER BY c.Name;
+`;
 
   db.query(query, [vendor_id], (err, results) => {
     if (err) {
@@ -1074,7 +1123,7 @@ app.post('/api/v1/request-payment', verifyToken, requireRole('customer'), (req, 
 
       db.query('SELECT Name FROM customer WHERE customer_id = ?', [customer_id], (cErr, cRes) => {
         const cName = (!cErr && cRes && cRes.length > 0) ? cRes[0].Name : 'Customer';
-        
+
         // Emit Socket event to vendor
         io.to(`vendor_${vendor_id}`).emit('payment-request', {
           request_id,
@@ -1247,11 +1296,11 @@ app.get('/api/v1/customer/addresses', verifyToken, requireRole('customer'), (req
 // Save Customer Address
 app.post('/api/v1/customer/addresses', verifyToken, requireRole('customer'), (req, res) => {
   const customer_id = req.user.user_id;
-  const { 
-    address_type, 
-    latitude, 
-    longitude, 
-    formatted_address, 
+  const {
+    address_type,
+    latitude,
+    longitude,
+    formatted_address,
     is_default,
     house_no,
     building_name,
@@ -1312,11 +1361,11 @@ app.post('/api/v1/customer/addresses', verifyToken, requireRole('customer'), (re
 app.put('/api/v1/customer/addresses/:address_id', verifyToken, requireRole('customer'), (req, res) => {
   const customer_id = req.user.user_id;
   const { address_id } = req.params;
-  const { 
-    address_type, 
-    latitude, 
-    longitude, 
-    formatted_address, 
+  const {
+    address_type,
+    latitude,
+    longitude,
+    formatted_address,
     is_default,
     house_no,
     building_name,
@@ -1495,11 +1544,11 @@ app.get('/api/v1/customer/nearby-vendors', verifyToken, requireRole('customer'),
 // Update Vendor Location & Service Radius
 app.post('/api/v1/vendor/location', verifyToken, requireRole('vendor'), (req, res) => {
   const vendor_id = req.user.user_id;
-  const { 
-    latitude, 
-    longitude, 
-    formatted_address, 
-    service_radius, 
+  const {
+    latitude,
+    longitude,
+    formatted_address,
+    service_radius,
     Shop_name,
     shop_number,
     landmark,
@@ -1532,7 +1581,7 @@ app.post('/api/v1/vendor/location', verifyToken, requireRole('vendor'), (req, re
     WHERE vendor_id = ?
   `;
   const params = [
-    lat, lon, formatted_address, radius, 
+    lat, lon, formatted_address, radius,
     Shop_name || null,
     shop_number || null,
     landmark || null,

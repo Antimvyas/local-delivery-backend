@@ -46,12 +46,15 @@ export default function RequestUdarScreen({ route }) {
   const checkExistingAccounts = async () => {
     try {
       const response = await api.get(`/customer-udar-accounts/${customer_id}`);
+
       const existingAccounts = {};
       const approvedRequests = {};
 
-      const accountsList = response.data.accounts || [];
+      const accountsList = response.data || [];
+
       accountsList.forEach(acc => {
         existingAccounts[acc.vendor_id] = true;
+
         if (acc.status === "accepted") {
           approvedRequests[acc.vendor_id] = true;
         }
