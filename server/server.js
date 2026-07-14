@@ -1709,6 +1709,10 @@ app.get('/api/v1/payment-requests/:customer_id', verifyToken, requireRole('custo
 app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, res) => {
   console.log("Received Payment Request Approval:", req.body);
   const { customer_id, amount_received, request_id } = req.body;
+  console.log("========== RECEIVE PAYMENT ==========");
+  console.log("Request Body:", req.body);
+  console.log("Vendor ID:", vendor_id);
+  console.log("====================================");
   const vendor_id = req.user.user_id;
 
   if (!customer_id || !amount_received) {
@@ -1729,19 +1733,38 @@ app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, re
       }
       const customerName = customerData[0].Name;
 
-      db.beginTransaction((tErr) => {
-        if (tErr) return res.status(500).json({ success: false, message: "Failed to start database transaction" });
+      db.getConnection((connErr, connection) => {
+        if (commitErr) {
+          return connection.rollback(() => {
+            connection.release();
+            return res.status(500).json({
+              success: false,
+              message: "Failed to commit ledger entry"
+            });
+          });
+        }
+        connection.beginTransaction((tErr) => {
 
+          if (tErr) {
+            connection.release();
+            return res.status(500).json({
+              success: false,
+              message: "Failed to start database transaction"
+            });
+          }
+        })
         // Step 1: Insert ledger adjustment row
         const insertPaymentQuery = `
           INSERT INTO account 
             (vendor_id, customer_id, customer_name, order_date_time, credit_value_vendor, debit_customer, credit_customer, balance_due, payment_method, payment_status, created_at) 
-          VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'cash', 'completed', NOW())
+          VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'cash', 'paid', NOW())
         `;
-        db.query(insertPaymentQuery, [vendor_id, customer_id, customerName, paymentAmount, paymentAmount, paymentAmount, -paymentAmount], (err) => {
+        connection.query(insertPaymentQuery, [vendor_id, customer_id, customerName, paymentAmount, paymentAmount, paymentAmount, -paymentAmount], (err) => {
           if (err) {
-            console.error("❌ Ledger error in receive-payment:", err);
-            return db.rollback(() => res.status(500).json({ success: false, message: "Ledger transaction failed" }));
+            console.error("❌ Ledger error:", err);
+            console.error("SQL Code:", err.code);
+            console.error("SQL Message:", err.sqlMessage);
+            return connection.rollback(() => res.status(500).json({ success: false, message: "Ledger transaction failed" }));
           }
 
           // Step 2: Update the payment request status to 'complete'
@@ -1750,10 +1773,12 @@ app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, re
             `UPDATE payment_requests SET status = 'complete', completed_time = NOW() WHERE customer_id = ? AND amount = ? AND status = 'pending' LIMIT 1`;
           const requestParams = request_id ? [request_id] : [customer_id, paymentAmount];
 
-          db.query(updateRequestSQL, requestParams, (err, updateResult) => {
+          connection.query(updateRequestSQL, requestParams, (err, updateResult) => {
             if (err) {
               console.error("❌ Request update error:", err);
-              return db.rollback(() => res.status(500).json({ success: false, message: "Failed to update payment request status" }));
+              console.error("SQL Code:", err.code);
+              console.error("SQL Message:", err.sqlMessage);
+              return connection.rollback(() => res.status(500).json({ success: false, message: "Failed to update payment request status" }));
             }
 
             // Step 3: Insert vendor_transaction record
@@ -1761,15 +1786,17 @@ app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, re
               INSERT INTO vendor_transaction (customer_id, vendor_id, amount, transaction_type)
               VALUES (?, ?, ?, 'credit')
             `;
-            db.query(insertVendorTransactionSQL, [customer_id, vendor_id, paymentAmount], (err) => {
+            connection.query(insertVendorTransactionSQL, [customer_id, vendor_id, paymentAmount], (err) => {
               if (err) {
                 console.error("❌ Transaction logging error:", err);
+                console.error("SQL Code:", err.code);
+                console.error("SQL Message:", err.sqlMessage);
                 return db.rollback(() => res.status(500).json({ success: false, message: "Failed to log transaction" }));
               }
 
-              db.commit((commitErr) => {
+              connection.commit((commitErr) => {
                 if (commitErr) {
-                  return db.rollback(() => res.status(500).json({ success: false, message: "Failed to commit ledger entry" }));
+                  return connection.rollback(() => res.status(500).json({ success: false, message: "Failed to commit ledger entry" }));
                 }
 
                 // Emit Socket.io real-time confirmations
@@ -1781,7 +1808,7 @@ app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, re
                   const sName = (!vErr && vRes && vRes.length > 0) ? vRes[0].Shop_name : 'Vendor';
                   sendPushNotification(customer_id, 'customer', 'Payment Approved', `Your payment of ₹${paymentAmount} has been approved by ${sName}.`, 'Payment Approved', 'MyUdarScreen').catch(e => console.error('FCM error:', e));
                 });
-
+                connection.release();
                 res.json({ success: true, message: "Payment verified and ledger updated successfully" });
               });
             });

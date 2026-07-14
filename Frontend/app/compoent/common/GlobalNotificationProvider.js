@@ -93,7 +93,7 @@ export const GlobalNotificationProvider = ({ children }) => {
         }
       });
     };
- 
+
     const handlePaymentRecorded = (data) => {
       console.log("Global Socket: payment-recorded received:", data);
       AsyncStorage.getItem('userRole').then((role) => {
@@ -105,7 +105,7 @@ export const GlobalNotificationProvider = ({ children }) => {
         }
       });
     };
- 
+
     const handlePaymentRejected = (data) => {
       console.log("Global Socket: payment-rejected received:", data);
       AsyncStorage.getItem('userRole').then((role) => {
@@ -125,7 +125,7 @@ export const GlobalNotificationProvider = ({ children }) => {
       incrementPaymentBadgeCount();
       // SILENCED: playNotificationSound();
     };
- 
+
     socket.on('connect', onConnect);
     socket.on('new-order', handleNewOrder);
     socket.on('payment-request', handlePaymentRequest);
@@ -190,6 +190,12 @@ export const GlobalNotificationProvider = ({ children }) => {
     setProcessingPayment(true);
     try {
       await api.post('/receive-payment', {
+
+        customer_id: newPayment.customer_id,
+        amount_received: newPayment.amount,
+        request_id: newPayment.request_id
+      });
+      console.log("Verify Payment Payload:", {
         customer_id: newPayment.customer_id,
         amount_received: newPayment.amount,
         request_id: newPayment.request_id
@@ -273,7 +279,7 @@ export const GlobalNotificationProvider = ({ children }) => {
               <Icon name="bell-ring" size={36} color={colors.warning} />
             </View>
             <Text style={styles.modalTitle}>New Order Received!</Text>
-            
+
             <View style={styles.detailsCard}>
               <Text style={styles.detailItem}>Customer: {newOrder?.customer_name}</Text>
               <Text style={styles.detailItem}>Amount: ₹{newOrder?.total_cost}</Text>
@@ -313,7 +319,7 @@ export const GlobalNotificationProvider = ({ children }) => {
               <Icon name="cash-register" size={36} color={colors.success} />
             </View>
             <Text style={styles.modalTitle}>Payment Submitted!</Text>
-            
+
             <View style={styles.detailsCard}>
               <Text style={styles.detailItem}>Customer: {newPayment?.customer_name}</Text>
               <Text style={styles.detailItem}>Amount: ₹{newPayment?.amount}</Text>
@@ -359,13 +365,13 @@ export const GlobalNotificationProvider = ({ children }) => {
               <Icon name="information-outline" size={36} color={colors.primary} />
             </View>
             <Text style={styles.modalTitle}>Order Update!</Text>
-            
+
             <View style={styles.detailsCard}>
               <Text style={styles.detailItem}>Order ID: #{customerOrderUpdate?.order_id}</Text>
               <Text style={styles.detailItem}>Status: {customerOrderUpdate?.status?.toUpperCase()}</Text>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.closeButton}
               onPress={() => {
                 stopNotificationSound();
@@ -391,14 +397,14 @@ export const GlobalNotificationProvider = ({ children }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={[styles.alertIconCircle, { backgroundColor: customerPaymentUpdate?.status === 'approved' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }]}>
-              <Icon 
-                name={customerPaymentUpdate?.status === 'approved' ? "checkbox-marked-circle-outline" : "close-circle-outline"} 
-                size={36} 
-                color={customerPaymentUpdate?.status === 'approved' ? colors.success : colors.error} 
+              <Icon
+                name={customerPaymentUpdate?.status === 'approved' ? "checkbox-marked-circle-outline" : "close-circle-outline"}
+                size={36}
+                color={customerPaymentUpdate?.status === 'approved' ? colors.success : colors.error}
               />
             </View>
             <Text style={styles.modalTitle}>Payment Update!</Text>
-            
+
             <View style={styles.detailsCard}>
               <Text style={styles.detailItem}>Amount: ₹{customerPaymentUpdate?.amount}</Text>
               <Text style={styles.detailItem}>
@@ -406,7 +412,7 @@ export const GlobalNotificationProvider = ({ children }) => {
               </Text>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.closeButton}
               onPress={() => {
                 stopNotificationSound();
@@ -434,7 +440,7 @@ export const GlobalNotificationProvider = ({ children }) => {
               <Icon name="hand-coin" size={36} color={colors.error} />
             </View>
             <Text style={styles.modalTitle}>Credit (Udhar) Request Received!</Text>
-            
+
             <View style={styles.detailsCard}>
               <Text style={styles.detailItem}>Customer: {newCreditRequest?.customer_name}</Text>
               <Text style={styles.detailItem}>Requested Limit: ₹{newCreditRequest?.credit_limit || '0.00'}</Text>

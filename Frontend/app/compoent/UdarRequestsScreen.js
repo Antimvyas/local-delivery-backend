@@ -32,9 +32,9 @@ export default function UdarRequestsScreen({ route }) {
   const [processingRequestId, setProcessingRequestId] = useState(null);
 
   // Date selection states
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
-  const [calendarVisible, setCalendarVisible] = useState(false);
+  // const [startDate, setStartDate] = useState(new Date());
+  // const [endDate, setEndDate] = useState(new Date());
+  // const [calendarVisible, setCalendarVisible] = useState(false);
 
   // Fetch requests function
   const fetchRequests = useCallback(async () => {
@@ -47,6 +47,8 @@ export default function UdarRequestsScreen({ route }) {
     try {
       setError(null);
       const response = await api.get(`/udar-requests/${vendor_id}`);
+      console.log("Vendor ID:", vendor_id);
+      console.log("API Response:", JSON.stringify(response.data, null, 2));
 
       let requestsData = [];
       if (Array.isArray(response.data)) {
@@ -61,6 +63,7 @@ export default function UdarRequestsScreen({ route }) {
       }
 
       setAllRequests(requestsData);
+      setRequests(requestsData);
     } catch (err) {
       console.error("Error fetching requests:", err);
       setError(err.message || "Failed to fetch requests");
@@ -71,21 +74,21 @@ export default function UdarRequestsScreen({ route }) {
   }, [vendor_id]);
 
   // Filter requests based on date range
-  useEffect(() => {
-    if (!startDate) {
-      setRequests(allRequests);
-      return;
-    }
-    const filtered = allRequests.filter(req => {
-      if (!req.request_date) return false;
-      const reqDate = new Date(req.request_date);
-      const cellDate = new Date(reqDate.getFullYear(), reqDate.getMonth(), reqDate.getDate());
-      const sDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-      const eDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-      return cellDate >= sDate && cellDate <= eDate;
-    });
-    setRequests(filtered);
-  }, [startDate, endDate, allRequests]);
+  // useEffect(() => {
+  //   if (!startDate) {
+  //     setRequests(allRequests);
+  //     return;
+  //   }
+  //   const filtered = allRequests.filter(req => {
+  //     if (!req.request_date) return false;
+  //     const reqDate = new Date(req.request_date);
+  //     const cellDate = new Date(reqDate.getFullYear(), reqDate.getMonth(), reqDate.getDate());
+  //     const sDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  //     const eDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  //     return cellDate >= sDate && cellDate <= eDate;
+  //   });
+  //   setRequests(filtered);
+  // }, [startDate, endDate, allRequests]);
 
   // Initial fetch
   useEffect(() => {
@@ -240,7 +243,7 @@ export default function UdarRequestsScreen({ route }) {
       <Text style={styles.header}>Credit Requests</Text>
 
       {/* Date Range Filter Card */}
-      <TouchableOpacity 
+      {/* <TouchableOpacity
         style={styles.filterCard}
         onPress={() => setCalendarVisible(true)}
         activeOpacity={0.8}
@@ -252,9 +255,9 @@ export default function UdarRequestsScreen({ route }) {
         <Text style={styles.selectedDatesText}>
           {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
         </Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
-      <AppCalendar
+      {/* <AppCalendar
         visible={calendarVisible}
         onClose={() => setCalendarVisible(false)}
         initialStartDate={startDate}
@@ -265,7 +268,7 @@ export default function UdarRequestsScreen({ route }) {
             setEndDate(end || start);
           }
         }}
-      />
+      /> */}
 
       {requests.length === 0 ? (
         <EmptyState
