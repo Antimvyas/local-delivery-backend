@@ -831,33 +831,33 @@ app.get('/api/v1/customer-transactions/:customer_id', verifyToken, (req, res) =>
     }
 
     // ✅ Calculate total amounts safely
-   const totalSummary = validTransactions.reduce(
-  (acc, item) => {
+    const totalSummary = validTransactions.reduce(
+      (acc, item) => {
 
-    const orderAmount = Number(item.credit_value_vendor || 0);
-    const paymentAmount = Number(item.debit_customer || 0);
+        const orderAmount = Number(item.credit_value_vendor || 0);
+        const paymentAmount = Number(item.debit_customer || 0);
 
-    acc.total_cost += Number(item.total_cost || 0);
+        acc.total_cost += Number(item.total_cost || 0);
 
-    // Total amount customer owes
-    acc.total_debit += orderAmount;
+        // Total amount customer owes
+        acc.total_debit += orderAmount;
 
-    // Total amount customer has paid
-    acc.total_credit += paymentAmount;
+        // Total amount customer has paid
+        acc.total_credit += paymentAmount;
 
-    return acc;
+        return acc;
 
-  },
-  {
-    total_cost: 0,
-    total_credit: 0,
-    total_debit: 0,
-    total_balance_due: 0
-  }
-);
+      },
+      {
+        total_cost: 0,
+        total_credit: 0,
+        total_debit: 0,
+        total_balance_due: 0
+      }
+    );
 
-totalSummary.total_balance_due =
-  totalSummary.total_debit - totalSummary.total_credit;
+    totalSummary.total_balance_due =
+      totalSummary.total_debit - totalSummary.total_credit;
 
     res.json({
       customer_name: validTransactions[0]?.customer_name || "",
@@ -1726,11 +1726,11 @@ app.get('/api/v1/payment-requests/:customer_id', verifyToken, requireRole('custo
 app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, res) => {
   console.log("Received Payment Request Approval:", req.body);
   const { customer_id, amount_received, request_id } = req.body;
-  const vendor_id = req.user.user_id;
   console.log("========== RECEIVE PAYMENT ==========");
   console.log("Request Body:", req.body);
   console.log("Vendor ID:", vendor_id);
   console.log("====================================");
+  const vendor_id = req.user.user_id;
 
   if (!customer_id || !amount_received) {
     return res.status(400).json({ success: false, message: "Missing customer_id or amount_received" });
@@ -1751,14 +1751,15 @@ app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, re
       const customerName = customerData[0].Name;
 
       db.getConnection((connErr, connection) => {
-
-        if (connErr) {
-          return res.status(500).json({
-            success: false,
-            message: "Failed to get database connection"
+        if (commitErr) {
+          return connection.rollback(() => {
+            connection.release();
+            return res.status(500).json({
+              success: false,
+              message: "Failed to commit ledger entry"
+            });
           });
         }
-
         connection.beginTransaction((tErr) => {
 
           if (tErr) {
@@ -1768,202 +1769,73 @@ app.post('/api/v1/receive-payment', verifyToken, requireRole('vendor'), (req, re
               message: "Failed to start database transaction"
             });
           }
+        })
+        // Step 1: Insert ledger adjustment row
+        const insertPaymentQuery = `
+          INSERT INTO account 
+            (vendor_id, customer_id, customer_name, order_date_time, credit_value_vendor, debit_customer, credit_customer, balance_due, payment_method, payment_status, created_at) 
+          VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'cash', 'paid', NOW())
+        `;
+        connection.query(insertPaymentQuery, [vendor_id, customer_id, customerName, paymentAmount, paymentAmount, paymentAmount, -paymentAmount], (err) => {
+          if (err) {
+            console.error("❌ Ledger error:", err);
+            console.error("SQL Code:", err.code);
+            console.error("SQL Message:", err.sqlMessage);
+            return connection.rollback(() => res.status(500).json({ success: false, message: "Ledger transaction failed" }));
+          }
 
-          // ================= STEP 1 =================
-          const insertPaymentQuery = `
-      INSERT INTO account
-      (
-        vendor_id,
-        customer_id,
-        customer_name,
-        order_date_time,
-        credit_value_vendor,
-        debit_customer,
-        credit_customer,
-        balance_due,
-        payment_method,
-        payment_status,
-        created_at
-      )
-      VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'cash', 'paid', NOW())
-    `;
+          // Step 2: Update the payment request status to 'complete'
+          const updateRequestSQL = request_id ?
+            `UPDATE payment_requests SET status = 'complete', completed_time = NOW() WHERE request_id = ? AND status = 'pending'` :
+            `UPDATE payment_requests SET status = 'complete', completed_time = NOW() WHERE customer_id = ? AND amount = ? AND status = 'pending' LIMIT 1`;
+          const requestParams = request_id ? [request_id] : [customer_id, paymentAmount];
 
-          connection.query(
-            insertPaymentQuery,
-            [
-              vendor_id,
-              customer_id,
-              customerName,
-              paymentAmount,
-              paymentAmount,
-              paymentAmount,
-              -paymentAmount
-            ],
-            (err) => {
+          connection.query(updateRequestSQL, requestParams, (err, updateResult) => {
+            if (err) {
+              console.error("❌ Request update error:", err);
+              console.error("SQL Code:", err.code);
+              console.error("SQL Message:", err.sqlMessage);
+              return connection.rollback(() => res.status(500).json({ success: false, message: "Failed to update payment request status" }));
+            }
 
+            // Step 3: Insert vendor_transaction record
+            const insertVendorTransactionSQL = `
+              INSERT INTO vendor_transaction (customer_id, vendor_id, amount, transaction_type)
+              VALUES (?, ?, ?, 'credit')
+            `;
+            connection.query(insertVendorTransactionSQL, [customer_id, vendor_id, paymentAmount], (err) => {
               if (err) {
-                console.error(err);
-
-                return connection.rollback(() => {
-                  connection.release();
-
-                  return res.status(500).json({
-                    success: false,
-                    message: err.sqlMessage || err.message
-                  });
-                });
+                console.error("❌ Transaction logging error:", err);
+                console.error("SQL Code:", err.code);
+                console.error("SQL Message:", err.sqlMessage);
+                return db.rollback(() => res.status(500).json({ success: false, message: "Failed to log transaction" }));
               }
 
-              // ================= STEP 2 =================
-
-              const updateRequestSQL = request_id
-                ? `UPDATE payment_requests
-             SET status='complete',
-                 completed_time=NOW()
-             WHERE request_id=?
-             AND status='pending'`
-                : `UPDATE payment_requests
-             SET status='complete',
-                 completed_time=NOW()
-             WHERE customer_id=?
-             AND amount=?
-             AND status='pending'
-             LIMIT 1`;
-
-              const requestParams = request_id
-                ? [request_id]
-                : [customer_id, paymentAmount];
-
-              connection.query(updateRequestSQL, requestParams, (err) => {
-
-                if (err) {
-
-                  console.error(err);
-
-                  return connection.rollback(() => {
-
-                    connection.release();
-
-                    return res.status(500).json({
-                      success: false,
-                      message: err.sqlMessage || err.message
-                    });
-
-                  });
-
+              connection.commit((commitErr) => {
+                if (commitErr) {
+                  return connection.rollback(() => res.status(500).json({ success: false, message: "Failed to commit ledger entry" }));
                 }
 
-                // ================= STEP 3 =================
+                // Emit Socket.io real-time confirmations
+                io.to(`vendor_${vendor_id}`).emit('payment-received', { customer_id, amount: paymentAmount, request_id });
+                io.to(`customer_${customer_id}`).emit('payment-recorded', { vendor_id, amount: paymentAmount, request_id });
 
-                const insertVendorTransactionSQL = `
-            INSERT INTO vendor_transaction
-            (
-              customer_id,
-              vendor_id,
-              amount,
-              transaction_type
-            )
-            VALUES (?, ?, ?, 'credit')
-          `;
-
-                connection.query(
-                  insertVendorTransactionSQL,
-                  [customer_id, vendor_id, paymentAmount],
-                  (err) => {
-
-                    if (err) {
-
-                      console.error(err);
-
-                      return connection.rollback(() => {
-
-                        connection.release();
-
-                        return res.status(500).json({
-                          success: false,
-                          message: err.sqlMessage || err.message
-                        });
-
-                      });
-
-                    }
-
-                    // ================= COMMIT =================
-
-                    connection.commit((commitErr) => {
-
-                      if (commitErr) {
-
-                        return connection.rollback(() => {
-
-                          connection.release();
-
-                          return res.status(500).json({
-                            success: false,
-                            message: commitErr.message
-                          });
-
-                        });
-
-                      }
-
-                      connection.release();
-
-                      io.to(`vendor_${vendor_id}`).emit("payment-received", {
-                        customer_id,
-                        amount: paymentAmount,
-                        request_id
-                      });
-
-                      io.to(`customer_${customer_id}`).emit("payment-recorded", {
-                        vendor_id,
-                        amount: paymentAmount,
-                        request_id
-                      });
-
-                      db.query(
-                        "SELECT Shop_name FROM vendor WHERE vendor_id=?",
-                        [vendor_id],
-                        (vErr, vRes) => {
-
-                          const shopName =
-                            !vErr && vRes.length
-                              ? vRes[0].Shop_name
-                              : "Vendor";
-
-                          sendPushNotification(
-                            customer_id,
-                            "customer",
-                            "Payment Approved",
-                            `Your payment of ₹${paymentAmount} has been approved by ${shopName}.`,
-                            "Payment Approved",
-                            "MyUdarScreen"
-                          ).catch(console.error);
-
-                        }
-                      );
-
-                      return res.json({
-                        success: true,
-                        message: "Payment verified successfully"
-                      });
-
-                    });
-
-                  }
-                );
-
+                // Send push notification
+                db.query('SELECT Shop_name FROM vendor WHERE vendor_id = ?', [vendor_id], (vErr, vRes) => {
+                  const sName = (!vErr && vRes && vRes.length > 0) ? vRes[0].Shop_name : 'Vendor';
+                  sendPushNotification(customer_id, 'customer', 'Payment Approved', `Your payment of ₹${paymentAmount} has been approved by ${sName}.`, 'Payment Approved', 'MyUdarScreen').catch(e => console.error('FCM error:', e));
+                });
+                connection.release();
+                res.json({ success: true, message: "Payment verified and ledger updated successfully" });
               });
-
-            }
-          );
-
+            });
+          });
         });
-
       });
     });
   });
 });
+
 
 // ✅ Reject Payment Request
 app.post('/api/v1/reject-payment', verifyToken, requireRole('vendor'), (req, res) => {
@@ -2243,17 +2115,28 @@ app.post("/api/v1/vendor/receive-payment", verifyToken, requireRole('vendor'), a
       }
 
       db.query("SELECT Name FROM customer WHERE customer_id = ?", [customer_id], (err, customerData) => {
-        if (err) return res.status(500).json({ success: false, message: "Database error" });
+        if (err) {
+          console.error("SQL ERROR:", err);
+          console.error("Code:", err.code);
+          console.error("Message:", err.sqlMessage);
+
+          return db.query('ROLLBACK', () =>
+            res.status(500).json({
+              success: false,
+              message: err.sqlMessage
+            })
+          );
+        }
         if (customerData.length === 0) return res.status(404).json({ success: false, message: "Customer not found" });
         const customerName = customerData[0].Name;
         db.query('START TRANSACTION', (err) => {
           if (err) return res.status(500).json({ success: false, message: "Failed to start transaction" });
-          const insertPaymentQuery = `INSERT INTO account (vendor_id, customer_id, customer_name, order_date_time, credit_value_vendor, debit_customer, credit_customer, balance_due, payment_method, payment_status, created_at) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'cash', 'completed', NOW())`;
+          const insertPaymentQuery = `INSERT INTO account (vendor_id, customer_id, customer_name, order_date_time, credit_value_vendor, debit_customer, credit_customer, balance_due, payment_method, payment_status, created_at) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'cash', 'paid', NOW())`;
           db.query(insertPaymentQuery, [vendor_id, customer_id, customerName, paymentAmount, paymentAmount, paymentAmount, -paymentAmount], (err) => {
             if (err) {
               return db.query('ROLLBACK', () => res.status(500).json({ success: false, message: "Database error" }));
             }
-            db.query("UPDATE payment_requests SET status = 'completed' WHERE customer_id = ? AND vendor_id = ? AND status = 'pending'", [customer_id, vendor_id], (err) => {
+            db.query("UPDATE payment_requests SET status = 'complete' WHERE customer_id = ? AND vendor_id = ? AND status = 'pending'", [customer_id, vendor_id], (err) => {
               if (err) {
                 return db.query('ROLLBACK', () => res.status(500).json({ success: false, message: "Database error" }));
               }

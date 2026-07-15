@@ -142,6 +142,8 @@ export default function VendorCustomerDetails({ route }) {
 
     setSubmitting(true);
     try {
+      console.log('daejade');
+      
       const response = await api.post(`/vendor/receive-payment`, {
         customer_id,
         vendor_id,
