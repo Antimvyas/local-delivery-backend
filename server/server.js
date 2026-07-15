@@ -857,7 +857,18 @@ app.get('/api/v1/customer-transactions/:customer_id', verifyToken, (req, res) =>
     totalSummary.total_credit = Number(totalSummary.total_credit.toFixed(2));
     totalSummary.total_debit = Number(totalSummary.total_debit.toFixed(2));
     totalSummary.total_balance_due = Number(totalSummary.total_balance_due.toFixed(2));
+    console.log("===== VALID TRANSACTIONS =====");
+    console.log(validTransactions);
 
+    console.log("===== TOTAL SUMMARY =====");
+    console.log(totalSummary);
+
+    console.log("TYPE total_cost:", typeof totalSummary.total_cost);
+    console.log("TYPE total_credit:", typeof totalSummary.total_credit);
+    console.log("TYPE total_debit:", typeof totalSummary.total_debit);
+    console.log("TYPE total_balance_due:", typeof totalSummary.total_balance_due);
+
+    console.log("CUSTOMER TRANSACTIONS API HIT");
     res.json({
       customer_name: validTransactions[0]?.customer_name || "",
       transactions: validTransactions,
