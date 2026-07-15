@@ -831,16 +831,33 @@ app.get('/api/v1/customer-transactions/:customer_id', verifyToken, (req, res) =>
     }
 
     // ✅ Calculate total amounts safely
-    const totalSummary = validTransactions.reduce(
-      (acc, item) => {
-        acc.total_cost += item.total_cost || 0;
-        acc.total_credit += item.debit_customer || 0;
-        acc.total_debit += item.credit_customer || 0;
-        acc.total_balance_due += item.balance_due || 0;
-        return acc;
-      },
-      { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
-    );
+   const totalSummary = validTransactions.reduce(
+  (acc, item) => {
+
+    const orderAmount = Number(item.credit_value_vendor || 0);
+    const paymentAmount = Number(item.debit_customer || 0);
+
+    acc.total_cost += Number(item.total_cost || 0);
+
+    // Total amount customer owes
+    acc.total_debit += orderAmount;
+
+    // Total amount customer has paid
+    acc.total_credit += paymentAmount;
+
+    return acc;
+
+  },
+  {
+    total_cost: 0,
+    total_credit: 0,
+    total_debit: 0,
+    total_balance_due: 0
+  }
+);
+
+totalSummary.total_balance_due =
+  totalSummary.total_debit - totalSummary.total_credit;
 
     res.json({
       customer_name: validTransactions[0]?.customer_name || "",

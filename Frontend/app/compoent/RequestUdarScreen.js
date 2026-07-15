@@ -43,29 +43,34 @@ export default function RequestUdarScreen({ route }) {
     }
   };
 
-  const checkExistingAccounts = async () => {
-    try {
-      const response = await api.get(`/customer-udar-accounts/${customer_id}`);
+ const checkExistingAccounts = async () => {
+  try {
+    const response = await api.get(`/customer-udar-accounts/${customer_id}`);
 
-      const existingAccounts = {};
-      const approvedRequests = {};
+    console.log("Response:", response.data);
 
-      const accountsList = response.data || [];
+    const existingAccounts = {};
+    const approvedRequests = {};
 
-      accountsList.forEach(acc => {
-        existingAccounts[acc.vendor_id] = true;
+    const accountsList = Array.isArray(response.data.accounts)
+      ? response.data.accounts
+      : [];
 
-        if (acc.status === "accepted") {
-          approvedRequests[acc.vendor_id] = true;
-        }
-      });
+    accountsList.forEach(acc => {
+      existingAccounts[acc.vendor_id] = true;
 
-      setUdarAccounts(existingAccounts);
-      setApprovedAccounts(approvedRequests);
-    } catch (error) {
-      console.error("Error checking existing accounts:", error);
-    }
-  };
+      if (acc.status === "accepted") {
+        approvedRequests[acc.vendor_id] = true;
+      }
+    });
+
+    setUdarAccounts(existingAccounts);
+    setApprovedAccounts(approvedRequests);
+
+  } catch (error) {
+    console.error("Error checking existing accounts:", error);
+  }
+};
 
   const handleOpenLimitModal = (selectedVendorId) => {
     setTargetVendorId(selectedVendorId);

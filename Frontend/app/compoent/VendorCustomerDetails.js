@@ -17,7 +17,7 @@ export default function VendorCustomerDetails({ route }) {
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [groupedTransactions, setGroupedTransactions] = useState({});
   const [totalSummary, setTotalSummary] = useState({});
-  
+
   // Date selection states
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
@@ -92,7 +92,7 @@ export default function VendorCustomerDetails({ route }) {
   // ✅ Function to Parse Date Correctly (Fix Format Issues)
   const parseDate = (dateString) => {
     if (!dateString) return null;
-    
+
     let parsedDate = new Date(dateString);
 
     if (isNaN(parsedDate)) {
@@ -147,7 +147,8 @@ export default function VendorCustomerDetails({ route }) {
         vendor_id,
         amount
       });
-
+      console.log('respinse of payemnt',response);
+      
       if (response.data.success) {
         showSuccess(`Successfully received ₹${amount} from ${customerName}`, "Payment Recorded");
         setCashReceived("");
@@ -162,13 +163,15 @@ export default function VendorCustomerDetails({ route }) {
       setSubmitting(false);
     }
   };
-
+  const formatMoney = (value) => {
+    return `₹${Number(value || 0).toFixed(2)}`;
+  };
   return (
     <View style={styles.container}>
       <Text style={styles.header}>{customerName}'s Credit Transactions</Text>
 
       {/* ✅ Date Range Filter */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.filterCard}
         onPress={() => setCalendarVisible(true)}
         activeOpacity={0.8}
@@ -240,10 +243,19 @@ export default function VendorCustomerDetails({ route }) {
 
       {/* ✅ Grand Total */}
       <View style={styles.Grand}>
-        <Text style={styles.summaryTitle}>Grand Total Summary</Text>
-        <Text style={styles.text3}>Grand Total: ₹{totalSummary.total_debit || 0}</Text>
-        <Text style={styles.text2}>You Received: ₹{totalSummary.total_credit || 0}</Text>
-        <Text style={styles.text4}>You will Receive: ₹{totalSummary.total_balance_due || 0}</Text>
+        <Text style={styles.summaryTitle}>Account Summary</Text>
+
+        <Text style={styles.text3}>
+          Total Credit Sales: {formatMoney(totalSummary.total_debit)}
+        </Text>
+
+        <Text style={styles.text2}>
+          Total Payments Received: {formatMoney(totalSummary.total_credit)}
+        </Text>
+
+        <Text style={styles.text4}>
+          Outstanding Balance: {formatMoney(totalSummary.total_balance_due)}
+        </Text>
       </View>
 
       {/* ✅ Receive Payment */}
@@ -305,33 +317,33 @@ const styles = StyleSheet.create({
   debit: { fontSize: 14, color: "red" },
   pending: { fontSize: 14, fontWeight: "bold", color: "#D32F2F" },
 
-  Grand:{
+  Grand: {
     width: "90%",
     height: 130,
-    borderTopWidth:2,
+    borderTopWidth: 2,
 
-    borderTopColor:"#CACACA",
+    borderTopColor: "#CACACA",
     alignSelf: "center",
     borderRadius: 10,
     padding: 20,
-    marginRight:20,
+    marginRight: 20,
     marginVertical: 15,
     alignItems: "center",
-    
+
     boxShadow: "5px 5px 7px rgba(93, 93, 93, 0.4)",
   },
-  summaryTitle:{
-    fontWeight:"bold",
-    color:"#4A4A4A",
-    fontSize:18,
-    top:-10
+  summaryTitle: {
+    fontWeight: "bold",
+    color: "#4A4A4A",
+    fontSize: 18,
+    top: -10
   },
-  text1:{
-    color:"#4A4A4A",
-    fontWeight:"bold",
-    left:-72,
-   
-    
+  text1: {
+    color: "#4A4A4A",
+    fontWeight: "bold",
+    left: -72,
+
+
   },
   filterCard: {
     backgroundColor: colors.card,
@@ -361,47 +373,47 @@ const styles = StyleSheet.create({
     marginLeft: 22,
   },
 
- 
-  text4:{
-    color:"#4A4A4A",
-    fontWeight:"bold",
-    left:-45,
-    
-    
+
+  text4: {
+    color: "#4A4A4A",
+    fontWeight: "bold",
+    left: -45,
+
+
   },
-  input:{
+  input: {
     // borderWidth:2,
-    width:"40%",
-    borderColor:"#CACACA",
-    backgroundColor:"#CACACA",
-    borderRadius:20,
-    left:10,
-    top:8,
+    width: "40%",
+    borderColor: "#CACACA",
+    backgroundColor: "#CACACA",
+    borderRadius: 20,
+    left: 10,
+    top: 8,
     boxShadow: "5px 5px 7px rgba(93, 93, 93, 0.4)",
   },
-  button:{
-    
+  button: {
+
     // borderWidth:2,
-    width:"50%",
-    height:"5%",
-    top:-25,
-    
-    left:160,
+    width: "50%",
+    height: "5%",
+    top: -25,
+
+    left: 160,
     boxShadow: "5px 5px 7px rgba(93, 93, 93, 0.4)",
-    backgroundColor:"gray",
-    alignItems:"center",
-    borderRadius:10
+    backgroundColor: "gray",
+    alignItems: "center",
+    borderRadius: 10
   }
-,
-buttonText:{
-  fontSize:20,
-  fontWeight:"bold"
-},
-bottomSection:{
-  // borderWidth:3,
-  
-  top:-40
-}
+  ,
+  buttonText: {
+    fontSize: 20,
+    fontWeight: "bold"
+  },
+  bottomSection: {
+    // borderWidth:3,
+
+    top: -40
+  }
 });
 
 // export default VendorCustomerDetails;

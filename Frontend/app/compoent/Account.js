@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { 
-  View, 
-  StyleSheet, 
-  ScrollView, 
-  ActivityIndicator, 
-  Modal, 
-  TouchableOpacity, 
-  Alert, 
-  Platform, 
-  PermissionsAndroid 
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Modal,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  PermissionsAndroid
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from "../utils/api";
@@ -22,7 +22,8 @@ import PrimaryButton from "./common/PrimaryButton";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNotification } from "./common/GlobalNotificationProvider";
 import Text from "../GlobalText";
-import Geolocation from '@react-native-community/geolocation';
+// import Geolocation from '@react-native-community/geolocation';
+import Geolocation from 'react-native-geolocation-service';
 
 const Account = ({ route, navigation }) => {
   const { customer_id } = route.params || {};
@@ -151,7 +152,7 @@ const Account = ({ route, navigation }) => {
         setAddressLoading(false);
         return;
       }
-
+      
       Geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
@@ -165,6 +166,9 @@ const Account = ({ route, navigation }) => {
               longitude
             });
             const addrStr = geocodeResponse.data.formatted_address || "";
+            console.log("ADDRESS:", addrStr);
+            console.log("GPS:", latitude, longitude);
+            console.log("Address:", addrStr);
             setAddrFormatted(addrStr);
 
             // Parse geocoded address parts
@@ -190,7 +194,9 @@ const Account = ({ route, navigation }) => {
             if (!st) {
               if (addrStr.toLowerCase().includes("haryana")) st = "Haryana";
             }
-
+            if (!s && parts.length > 0) s = parts[0];
+            if (!c && parts.length > 1) c = parts[1];
+            if (!st && parts.length > 2) st = parts[2];
             setArea(s);
             setCity(c);
             setState(st);
@@ -217,10 +223,10 @@ const Account = ({ route, navigation }) => {
           }
         },
         {
-          enableHighAccuracy: false,
-          timeout: 15000,
-          maximumAge: 10000,
-          forceLocationManager: true
+          enableHighAccuracy: true,
+          timeout: 30000,
+          maximumAge: 0,
+          showLocationDialog: true
         }
       );
     } catch (err) {
@@ -292,8 +298,8 @@ const Account = ({ route, navigation }) => {
       "Are you sure you want to delete this address?",
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
+        {
+          text: "Delete",
           style: "destructive",
           onPress: async () => {
             try {
@@ -429,7 +435,7 @@ const Account = ({ route, navigation }) => {
         {/* Editable Card */}
         <View style={styles.card}>
           <Text style={styles.cardHeaderTitle}>Edit Profile Information</Text>
-          
+
           <AppInput
             label="Customer Name:"
             placeholder="Enter your name"
@@ -462,8 +468,8 @@ const Account = ({ route, navigation }) => {
               loading={submitting}
               style={[styles.updateBtn, { flex: 1, marginTop: 0 }]}
             />
-            <TouchableOpacity 
-              style={styles.logoutBtn} 
+            <TouchableOpacity
+              style={styles.logoutBtn}
               onPress={handleLogout}
               activeOpacity={0.8}
             >
@@ -511,21 +517,21 @@ const Account = ({ route, navigation }) => {
 
                   <View style={styles.addressActions}>
                     {addr.is_default === 0 && (
-                      <TouchableOpacity 
-                        style={styles.actionBtn} 
+                      <TouchableOpacity
+                        style={styles.actionBtn}
                         onPress={() => handleSetDefault(addr.address_id)}
                       >
                         <Icon name="check" size={18} color={colors.success} />
                       </TouchableOpacity>
                     )}
-                    <TouchableOpacity 
-                      style={styles.actionBtn} 
+                    <TouchableOpacity
+                      style={styles.actionBtn}
                       onPress={() => handleOpenEditModal(addr)}
                     >
                       <Icon name="pencil" size={18} color={colors.secondary} />
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.actionBtn} 
+                    <TouchableOpacity
+                      style={styles.actionBtn}
                       onPress={() => handleDeleteAddress(addr.address_id)}
                     >
                       <Icon name="delete" size={18} color={colors.error} />
@@ -574,8 +580,8 @@ const Account = ({ route, navigation }) => {
               </View>
 
               {/* Get GPS Autofill button */}
-              <TouchableOpacity 
-                style={styles.gpsAutofillBtn} 
+              <TouchableOpacity
+                style={styles.gpsAutofillBtn}
                 onPress={handleGetGPSLocation}
                 disabled={addressLoading}
               >
@@ -589,14 +595,14 @@ const Account = ({ route, navigation }) => {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[styles.checkboxRow, { marginBottom: 15 }]} 
+              <TouchableOpacity
+                style={[styles.checkboxRow, { marginBottom: 15 }]}
                 onPress={() => setShowManualCoords(!showManualCoords)}
               >
-                <Icon 
-                  name={showManualCoords ? "checkbox-marked" : "checkbox-blank-outline"} 
-                  size={22} 
-                  color={colors.primary} 
+                <Icon
+                  name={showManualCoords ? "checkbox-marked" : "checkbox-blank-outline"}
+                  size={22}
+                  color={colors.primary}
                 />
                 <Text style={styles.checkboxLabel}>Enter coordinates manually</Text>
               </TouchableOpacity>
@@ -682,14 +688,14 @@ const Account = ({ route, navigation }) => {
               )}
 
               {/* Default checkbox alternative */}
-              <TouchableOpacity 
-                style={styles.checkboxRow} 
+              <TouchableOpacity
+                style={styles.checkboxRow}
                 onPress={() => setAddrIsDefault(!addrIsDefault)}
               >
-                <Icon 
-                  name={addrIsDefault ? "checkbox-marked" : "checkbox-blank-outline"} 
-                  size={22} 
-                  color={colors.primary} 
+                <Icon
+                  name={addrIsDefault ? "checkbox-marked" : "checkbox-blank-outline"}
+                  size={22}
+                  color={colors.primary}
                 />
                 <Text style={styles.checkboxLabel}>Set as Default Delivery Address</Text>
               </TouchableOpacity>
