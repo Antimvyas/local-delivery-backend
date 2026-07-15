@@ -59,6 +59,8 @@ export default function MyUdarScreen({ route }) {
       const response = await api.get(`/customer/udar/${customer_id}`, {
         params: { vendor_id: vendorId }
       });
+      console.log("Transactions:", response.data.transactions);
+console.log("Summary:", response.data.totalSummary);
 
       setShopName(response.data.Shop_name || "");
       setTotalSummary(response.data.totalSummary || {});
@@ -76,15 +78,15 @@ export default function MyUdarScreen({ route }) {
       groupByOrderId(transactions);
       return;
     }
-    
+
     const filtered = transactions.filter((transaction) => {
       const transactionDate = parseDate(transaction.order_date_time);
       if (!transactionDate) return false;
-      
+
       const txDate = new Date(transactionDate.getFullYear(), transactionDate.getMonth(), transactionDate.getDate());
       const sDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
       const eDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-      
+
       return txDate >= sDate && txDate <= eDate;
     });
 
@@ -120,10 +122,10 @@ export default function MyUdarScreen({ route }) {
         };
       }
       grouped[key].items.push(item);
-      grouped[key].total_cost += item.total_cost || 0;
-      grouped[key].total_credit += item.credit_customer || 0;
-      grouped[key].total_debit += item.debit_customer || 0;
-      grouped[key].balance_due += item.balance_due || 0;
+      grouped[key].total_cost += Number(item.total_cost || 0);
+      grouped[key].total_credit += Number(item.credit_customer || 0);
+      grouped[key].total_debit += Number(item.debit_customer || 0);
+      grouped[key].balance_due += Number(item.balance_due || 0);
     });
 
     setGroupedTransactions(grouped);
@@ -164,13 +166,16 @@ export default function MyUdarScreen({ route }) {
       setLoading(false);
     }
   };
-
+  const formatMoney = (value) => {
+    const amount = Number(value || 0);
+    return `₹${amount.toFixed(2)}`;
+  };
   return (
     <View style={styles.container}>
       <Text style={styles.header}>{ShopName} - Credit Account Ledger</Text>
 
       {/* Date Range Filter Card */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.filterCard}
         onPress={() => setCalendarVisible(true)}
         activeOpacity={0.8}
@@ -207,10 +212,10 @@ export default function MyUdarScreen({ route }) {
               <View style={styles.card} key={orderId}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.orderHeader}>{isPayment ? "💳 Payment Receipt" : `Order ID: #${orderId}`}</Text>
-                  <Icon 
-                    name={isPayment ? "cash-check" : "receipt"} 
-                    size={18} 
-                    color={isPayment ? colors.success : colors.primary} 
+                  <Icon
+                    name={isPayment ? "cash-check" : "receipt"}
+                    size={18}
+                    color={isPayment ? colors.success : colors.primary}
                   />
                 </View>
                 <Text style={styles.orderDate}>
@@ -233,11 +238,11 @@ export default function MyUdarScreen({ route }) {
                 <View style={styles.cardContent}>
                   <View style={styles.column}>
                     {isPayment ? (
-                      <Text style={[styles.summaryText, { color: colors.success }]}>Repaid Amount: ₹{order.total_debit}</Text>
+                      <Text style={[styles.summaryText, { color: colors.success }]}>Repaid Amount: ₹{formatMoney(order.total_debit)}</Text>
                     ) : (
                       <>
-                        <Text style={styles.summaryText}>Total Cost: ₹{order.total_cost}</Text>
-                        <Text style={styles.debit}>Borrowed: ₹{order.total_credit}</Text>
+                        <Text style={styles.summaryText}>Total Cost: ₹{formatMoney(order.total_cost)}</Text>
+                        <Text style={styles.debit}>Borrowed: ₹{formatMoney(order.total_credit)}</Text>
                       </>
                     )}
                   </View>
@@ -253,15 +258,15 @@ export default function MyUdarScreen({ route }) {
         <Text style={styles.summaryTitle}>Credit Account Summary</Text>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Total Credit:</Text>
-          <Text style={styles.summaryVal}>₹{totalSummary.total_credit || 0}</Text>
+          <Text style={styles.summaryVal}>₹{formatMoney(totalSummary.total_credit) || 0}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Total Paid:</Text>
-          <Text style={styles.summaryValSuccess}>₹{totalSummary.total_debit || 0}</Text>
+          <Text style={styles.summaryValSuccess}>₹{formatMoney(totalSummary.total_debit) || 0}</Text>
         </View>
         <View style={[styles.summaryRow, styles.borderTop]}>
           <Text style={styles.summaryLabelBold}>Balance Due:</Text>
-          <Text style={styles.summaryValError}>₹{totalSummary.total_balance_due || 0}</Text>
+          <Text style={styles.summaryValError}>₹{formatMoney(totalSummary.total_balance_due) || 0}</Text>
         </View>
       </View>
 
@@ -275,9 +280,9 @@ export default function MyUdarScreen({ route }) {
           onChangeText={setPaymentAmount}
           containerStyle={styles.paymentInput}
         />
-        <PrimaryButton 
-          title="Send Payment" 
-          onPress={requestPayment} 
+        <PrimaryButton
+          title="Send Payment"
+          onPress={requestPayment}
           loading={loading}
           style={styles.paymentBtn}
         />
@@ -287,20 +292,20 @@ export default function MyUdarScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.background, 
-    padding: spacing.md 
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: spacing.md
   },
-  header: { 
-    fontSize: typography.fontSize.md, 
-    fontWeight: "bold", 
-    marginVertical: spacing.sm, 
+  header: {
+    fontSize: typography.fontSize.md,
+    fontWeight: "bold",
+    marginVertical: spacing.sm,
     color: colors.textPrimary,
     textAlign: 'center',
   },
-  scrollView: { 
-    flex: 1, 
+  scrollView: {
+    flex: 1,
   },
   transactionsBlock: {
     paddingBottom: spacing.md,
@@ -349,15 +354,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  orderHeader: { 
-    fontSize: typography.fontSize.sm, 
-    fontWeight: "bold", 
-    color: colors.textPrimary 
+  orderHeader: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: "bold",
+    color: colors.textPrimary
   },
-  orderDate: { 
-    fontSize: 11, 
-    color: colors.textSecondary, 
-    marginBottom: spacing.sm 
+  orderDate: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm
   },
   itemsBlock: {
     backgroundColor: colors.background,
@@ -365,8 +370,8 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginBottom: spacing.sm,
   },
-  foodItem: { 
-    fontSize: typography.fontSize.xs, 
+  foodItem: {
+    fontSize: typography.fontSize.xs,
     color: colors.textPrimary,
     marginVertical: 1,
   },

@@ -834,16 +834,13 @@ app.get('/api/v1/customer-transactions/:customer_id', verifyToken, (req, res) =>
     const totalSummary = validTransactions.reduce(
       (acc, item) => {
 
-        const orderAmount = Number(item.credit_value_vendor || 0);
-        const paymentAmount = Number(item.debit_customer || 0);
+        acc.total_cost += parseFloat(item.total_cost) || 0;
 
-        acc.total_cost += Number(item.total_cost || 0);
+        acc.total_credit += parseFloat(item.debit_customer) || 0;
 
-        // Total amount customer owes
-        acc.total_debit += orderAmount;
+        acc.total_debit += parseFloat(item.credit_customer) || 0;
 
-        // Total amount customer has paid
-        acc.total_credit += paymentAmount;
+        acc.total_balance_due += parseFloat(item.balance_due) || 0;
 
         return acc;
 
