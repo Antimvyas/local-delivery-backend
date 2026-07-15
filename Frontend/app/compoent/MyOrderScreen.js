@@ -139,7 +139,7 @@ const MyOrdersScreen = ({ route, navigation }) => {
         order_id: reviewOrderId,
         rating: reviewRating,
         review_text: reviewText,
-        delivery_success: deliverySuccess
+        delivered_successfully: deliverySuccess
       });
       showSuccess("Thank you for your feedback!", "Review Submitted");
       setShowReviewModal(false);

@@ -499,7 +499,7 @@ app.get('/api/v1/customer/orders/new', verifyToken, requireRole('customer'), asy
 // Save Order Review
 app.post('/api/v1/reviews', verifyToken, requireRole('customer'), (req, res) => {
   const customer_id = req.user.user_id;
-  const { order_id, rating, review_text, delivery_success } = req.body;
+  const { order_id, rating, review_text, delivered_successfully } = req.body;
 
   if (!order_id || rating === undefined) {
     return res.status(400).json({ error: "Order ID and rating are required" });
@@ -510,11 +510,18 @@ app.post('/api/v1/reviews', verifyToken, requireRole('customer'), (req, res) => 
     return res.status(400).json({ error: "Rating must be between 1 and 5" });
   }
 
-  const delSuccess = delivery_success ? 1 : 0;
+  const delSuccess = delivered_successfully ? 1 : 0;
 
   const insertQuery = `
-    INSERT INTO order_reviews (order_id, customer_id, rating, review_text, delivery_success)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO order_reviews
+(
+    order_id,
+    customer_id,
+    rating,
+    review_text,
+    delivered_successfully
+)
+VALUES (?, ?, ?, ?, ?)
   `;
   db.query(insertQuery, [order_id, customer_id, rat, review_text || null, delSuccess], (err, result) => {
     if (err) {
@@ -857,7 +864,7 @@ app.get('/api/v1/customer-transactions/:customer_id', verifyToken, (req, res) =>
     totalSummary.total_credit = Number(totalSummary.total_credit.toFixed(2));
     totalSummary.total_debit = Number(totalSummary.total_debit.toFixed(2));
     totalSummary.total_balance_due = Number(totalSummary.total_balance_due.toFixed(2));
-    
+
     res.json({
       customer_name: validTransactions[0]?.customer_name || "",
       transactions: validTransactions,
@@ -1938,15 +1945,49 @@ app.get('/api/v1/update/:customer_id', verifyToken, requireRole('customer'), req
 
 
 // set update
-app.put('/api/v1/customer/:id', verifyToken, requireRole('customer'), requireCustomerOwnership, (req, res) => {
-  const customer_id = req.params.id;
-  const { Name, Phone, username } = req.body;
-  const sql = "UPDATE customer SET Name = ?, Phone = ?, username = ? WHERE customer_id = ?";
-  db.query(sql, [Name, Phone, username, customer_id], (err, result) => {
-    if (err) return res.status(500).json({ error: err });
-    res.json({ message: "Customer updated successfully" });
-  });
-});
+app.put('/api/v1/customer/:id',  verifyToken,  requireRole('customer'),  requireCustomerOwnership,  (req, res) => {
+  
+    const customer_id = req.params.id;
+    const { Name, Phone, username } = req.body;
+
+    console.log("========== UPDATE CUSTOMER ==========");
+    console.log("Customer ID:", customer_id);
+    console.log("Body:", req.body);
+
+    const sql =
+      "UPDATE customer SET Name=?, Phone=?, username=? WHERE customer_id=?";
+
+    db.query(
+      sql,
+      [Name, Phone, username, customer_id],
+      (err, result) => {
+
+        if (err) {
+          console.error("UPDATE ERROR:", err);
+
+          return res.status(500).json({
+            success: false,
+            message: err.sqlMessage || err.message
+          });
+        }
+
+        if (result.affectedRows === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Customer not found"
+          });
+        }
+
+        console.log("Profile Updated Successfully");
+
+        return res.json({
+          success: true,
+          message: "Customer updated successfully"
+        });
+      }
+    );
+  }
+);
 
 //  food
 

@@ -90,12 +90,28 @@ const Account = ({ route, navigation }) => {
 
   const updateCustomer = async () => {
     setSubmitting(true);
+
     try {
-      await api.put(`/customer/${customer_id}`, customer);
+      const response = await api.put(`/customer/${customer_id}`, customer);
+
+      console.log("Profile Update Success:", response.data);
+
       showSuccess("Profile updated successfully!");
+
     } catch (error) {
-      console.error("Error updating customer", error);
-      showError("Failed to update profile.");
+
+      console.log("========== PROFILE UPDATE ERROR ==========");
+      console.log("Status:", error.response?.status);
+      console.log("Response:", error.response?.data);
+      console.log("Message:", error.message);
+      console.log("=========================================");
+
+      showError(
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        "Failed to update profile."
+      );
+
     } finally {
       setSubmitting(false);
     }
@@ -152,7 +168,7 @@ const Account = ({ route, navigation }) => {
         setAddressLoading(false);
         return;
       }
-      
+
       Geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
