@@ -857,18 +857,7 @@ app.get('/api/v1/customer-transactions/:customer_id', verifyToken, (req, res) =>
     totalSummary.total_credit = Number(totalSummary.total_credit.toFixed(2));
     totalSummary.total_debit = Number(totalSummary.total_debit.toFixed(2));
     totalSummary.total_balance_due = Number(totalSummary.total_balance_due.toFixed(2));
-    console.log("===== VALID TRANSACTIONS =====");
-    console.log(validTransactions);
-
-    console.log("===== TOTAL SUMMARY =====");
-    console.log(totalSummary);
-
-    console.log("TYPE total_cost:", typeof totalSummary.total_cost);
-    console.log("TYPE total_credit:", typeof totalSummary.total_credit);
-    console.log("TYPE total_debit:", typeof totalSummary.total_debit);
-    console.log("TYPE total_balance_due:", typeof totalSummary.total_balance_due);
-
-    console.log("CUSTOMER TRANSACTIONS API HIT");
+    
     res.json({
       customer_name: validTransactions[0]?.customer_name || "",
       transactions: validTransactions,
@@ -1106,15 +1095,30 @@ app.get('/api/v1/customer/udar/:customer_id', verifyToken, requireRole('customer
     // ✅ Calculate total amounts safely
     const totalSummary = validTransactions.reduce(
       (acc, item) => {
-        acc.total_cost += item.total_cost || 0;
-        acc.total_credit += item.debit_value_vendor || 0;
-        acc.total_debit += item.credit_value_vendor || 0;
-        acc.total_balance_due += item.balance_due || 0;
+
+        acc.total_cost += parseFloat(item.total_cost || 0);
+
+        acc.total_credit += parseFloat(item.debit_value_vendor || 0);
+
+        acc.total_debit += parseFloat(item.credit_value_vendor || 0);
+
+        acc.total_balance_due += parseFloat(item.balance_due || 0);
+
         return acc;
+
       },
-      { total_cost: 0, total_credit: 0, total_debit: 0, total_balance_due: 0 }
+      {
+        total_cost: 0,
+        total_credit: 0,
+        total_debit: 0,
+        total_balance_due: 0
+      }
     );
 
+    totalSummary.total_cost = Number(totalSummary.total_cost.toFixed(2));
+    totalSummary.total_credit = Number(totalSummary.total_credit.toFixed(2));
+    totalSummary.total_debit = Number(totalSummary.total_debit.toFixed(2));
+    totalSummary.total_balance_due = Number(totalSummary.total_balance_due.toFixed(2));
     res.json({
       vendor_id: validTransactions[0]?.vendor_id || null,
       Shop_name: validTransactions[0]?.Shop_name || "",

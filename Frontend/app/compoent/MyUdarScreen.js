@@ -61,6 +61,7 @@ export default function MyUdarScreen({ route }) {
       });
       console.log("Transactions:", response.data.transactions);
 console.log("Summary:", response.data.totalSummary);
+console.log('adfew');
 
       setShopName(response.data.Shop_name || "");
       setTotalSummary(response.data.totalSummary || {});

@@ -247,11 +247,11 @@ export default function VendorCustomerDetails({ route }) {
       <View style={styles.Grand}>
         <Text style={styles.summaryTitle}>Account Summary</Text>
 
-        <Text style={styles.text3}>
+        <Text style={styles.text4}>
           Total Credit Sales: {formatMoney(totalSummary.total_debit)}
         </Text>
 
-        <Text style={styles.text2}>
+        <Text style={styles.text4}>
           Total Payments Received: {formatMoney(totalSummary.total_credit)}
         </Text>
 
