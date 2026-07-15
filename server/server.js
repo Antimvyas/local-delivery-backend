@@ -498,38 +498,105 @@ app.get('/api/v1/customer/orders/new', verifyToken, requireRole('customer'), asy
 
 // Save Order Review
 app.post('/api/v1/reviews', verifyToken, requireRole('customer'), (req, res) => {
+
   const customer_id = req.user.user_id;
-  const { order_id, rating, review_text, delivered_successfully } = req.body;
+  const {
+    order_id,
+    rating,
+    review_text,
+    delivered_successfully
+  } = req.body;
 
   if (!order_id || rating === undefined) {
-    return res.status(400).json({ error: "Order ID and rating are required" });
+    return res.status(400).json({
+      success: false,
+      message: "Order ID and rating are required"
+    });
   }
 
   const rat = parseInt(rating);
+
   if (isNaN(rat) || rat < 1 || rat > 5) {
-    return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    return res.status(400).json({
+      success: false,
+      message: "Rating must be between 1 and 5"
+    });
   }
 
   const delSuccess = delivered_successfully ? 1 : 0;
 
-  const insertQuery = `
-    INSERT INTO order_reviews
-(
-    order_id,
-    customer_id,
-    rating,
-    review_text,
-    delivered_successfully
-)
-VALUES (?, ?, ?, ?, ?)
+  // Get vendor_id from the order
+  const vendorQuery = `
+    SELECT vendor_id
+    FROM orders
+    WHERE order_id = ?
+    LIMIT 1
   `;
-  db.query(insertQuery, [order_id, customer_id, rat, review_text || null, delSuccess], (err, result) => {
+
+  db.query(vendorQuery, [order_id], (err, orderResult) => {
+
     if (err) {
-      console.error("Error saving review:", err);
-      return res.status(500).json({ error: "Database error" });
+      console.error("Vendor lookup error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database error"
+      });
     }
-    res.json({ success: true, message: "Review saved successfully", review_id: result.insertId });
+
+    if (orderResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found"
+      });
+    }
+
+    const vendor_id = orderResult[0].vendor_id;
+
+    const insertQuery = `
+      INSERT INTO order_reviews
+      (
+        order_id,
+        customer_id,
+        vendor_id,
+        rating,
+        review_text,
+        delivered_successfully
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    db.query(
+      insertQuery,
+      [
+        order_id,
+        customer_id,
+        vendor_id,
+        rat,
+        review_text || null,
+        delSuccess
+      ],
+      (err, result) => {
+
+        if (err) {
+          console.error("Error saving review:", err);
+
+          return res.status(500).json({
+            success: false,
+            message: err.sqlMessage || err.message
+          });
+        }
+
+        return res.json({
+          success: true,
+          message: "Review saved successfully",
+          review_id: result.insertId
+        });
+
+      }
+    );
+
   });
+
 });
 
 
