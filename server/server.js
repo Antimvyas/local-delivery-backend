@@ -853,8 +853,10 @@ app.get('/api/v1/customer-transactions/:customer_id', verifyToken, (req, res) =>
       }
     );
 
-    totalSummary.total_balance_due =
-      totalSummary.total_debit - totalSummary.total_credit;
+    totalSummary.total_cost = Number(totalSummary.total_cost.toFixed(2));
+    totalSummary.total_credit = Number(totalSummary.total_credit.toFixed(2));
+    totalSummary.total_debit = Number(totalSummary.total_debit.toFixed(2));
+    totalSummary.total_balance_due = Number(totalSummary.total_balance_due.toFixed(2));
 
     res.json({
       customer_name: validTransactions[0]?.customer_name || "",
