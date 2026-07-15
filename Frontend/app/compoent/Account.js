@@ -22,8 +22,8 @@ import PrimaryButton from "./common/PrimaryButton";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNotification } from "./common/GlobalNotificationProvider";
 import Text from "../GlobalText";
-// import Geolocation from '@react-native-community/geolocation';
-import Geolocation from 'react-native-geolocation-service';
+import Geolocation from '@react-native-community/geolocation';
+// import Geolocation from 'react-native-geolocation-service';
 
 const Account = ({ route, navigation }) => {
   const { customer_id } = route.params || {};
@@ -172,77 +172,53 @@ const Account = ({ route, navigation }) => {
       Geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          setAddrLat(latitude.toString());
-          setAddrLon(longitude.toString());
-
           try {
-            // Reverse Geocode
             const geocodeResponse = await api.post('/location/reverse-geocode', {
               latitude,
               longitude
             });
-            const addrStr = geocodeResponse.data.formatted_address || "";
-            console.log("ADDRESS:", addrStr);
-            console.log("GPS:", latitude, longitude);
-            console.log("Address:", addrStr);
-            setAddrFormatted(addrStr);
+            const formattedAddress = geocodeResponse.data.formatted_address;
 
-            // Parse geocoded address parts
-            let s = "";
-            let c = "";
-            let st = "";
+            const saveResponse = await api.post('/customer/addresses', {
+              address_type: 'current',
+              latitude,
+              longitude,
+              formatted_address: formattedAddress,
+              is_default: true
+            });
 
-            const parts = addrStr.split(',').map(item => item.trim());
-            for (const part of parts) {
-              if (/sector\s*\d+/i.test(part) || /pocket\s*[a-z0-9]/i.test(part)) s = part;
-              else if (/hisar/i.test(part) || /gurugram/i.test(part) || /delhi/i.test(part)) c = part;
-              else if (/haryana/i.test(part) || /punjab/i.test(part) || /delhi/i.test(part)) st = part;
+            if (saveResponse.data && saveResponse.data.success) {
+              showSuccess("Current location saved and set as default!");
+              await fetchCustomerAddressesAndVendors();
+              setShowAddressModal(false);
+            } else {
+              showError("Failed to save address.");
             }
-
-            if (!s) {
-              const m = addrStr.match(/Sector\s*\d+/i);
-              if (m) s = m[0];
-            }
-            if (!c) {
-              if (addrStr.toLowerCase().includes("hisar")) c = "Hisar";
-              else if (addrStr.toLowerCase().includes("gurugram")) c = "Gurugram";
-            }
-            if (!st) {
-              if (addrStr.toLowerCase().includes("haryana")) st = "Haryana";
-            }
-            if (!s && parts.length > 0) s = parts[0];
-            if (!c && parts.length > 1) c = parts[1];
-            if (!st && parts.length > 2) st = parts[2];
-            setArea(s);
-            setCity(c);
-            setState(st);
-
-            showSuccess("GPS coordinates and address fetched successfully!");
           } catch (err) {
-            console.error("Geocoding error", err);
-            showError("Failed to resolve address description.");
+            console.error("Geocoding/Save address error", err);
+            showError("Failed to resolve coordinates to an address.");
           } finally {
-            setAddressLoading(false);
+            setGeocodingLoading(false);
           }
         },
         (error) => {
           console.error("Geolocation error", error);
-          setAddressLoading(false);
+          setGeocodingLoading(false);
           if (error.code === 1) {
             showError("Location permission denied.");
           } else if (error.code === 2) {
-            showError("GPS disabled or location unavailable. Please verify device settings.");
+            showError("GPS is disabled or location unavailable. Please check device settings.");
           } else if (error.code === 3) {
-            showError("Location request timed out.");
+            showError("Location request timed out. Please try again.");
           } else {
-            showError("Unable to fetch location. Please check GPS.");
+            showError("Unable to fetch location. Please check GPS settings.");
           }
         },
         {
-          enableHighAccuracy: true,
-          timeout: 30000,
-          maximumAge: 0,
-          showLocationDialog: true
+          enableHighAccuracy: false,
+          timeout: 15000,
+          maximumAge: 10000,
+          forceLocationManager: true,
         }
       );
     } catch (err) {
